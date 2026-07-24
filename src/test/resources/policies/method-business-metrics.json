@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "1.0",
+  "requestHeaders": [],
+  "responseHeaders": [],
+  "metricPolicies": [],
+  "methodPolicies": [
+    {
+      "id": "cambistapp-rate-calculation-v1",
+      "enabled": true,
+      "packagePrefix": "dev.o11y.rates.service",
+      "className": "dev.o11y.rates.service.ExchangeRateCalculator",
+      "methodName": "calculate",
+      "captures": [
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "customerType",
+          "constant": 1,
+          "attribute": "customer.type",
+          "type": "STRING",
+          "destinations": ["SPAN", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["SALARY_ACCOUNT", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "salaryAccount",
+          "constant": 1,
+          "attribute": "customer.salary_account",
+          "type": "BOOLEAN",
+          "destinations": ["SPAN", "METRIC"],
+          "valuePolicy": {
+            "type": "BOOLEAN",
+            "allowed": [],
+            "fallback": "false",
+            "ranges": []
+          }
+        },
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "amount",
+          "constant": 1,
+          "attribute": "exchange.amount.range",
+          "type": "DOUBLE",
+          "destinations": ["METRIC"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": [
+              { "max": 1000, "label": "0-1000" },
+              { "max": 3000, "label": "1000-3000" },
+              { "max": 10000, "label": "3000-10000" },
+              { "max": null, "label": "10000+" }
+            ]
+          }
+        },
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "sourceCurrency",
+          "constant": 1,
+          "attribute": "currency.source",
+          "type": "STRING",
+          "destinations": ["SPAN", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PEN", "USD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "targetCurrency",
+          "constant": 1,
+          "attribute": "currency.target",
+          "type": "STRING",
+          "destinations": ["SPAN", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PEN", "USD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "source": "RETURN",
+          "argumentIndex": -1,
+          "path": "rateType",
+          "constant": 1,
+          "attribute": "exchange.rate.type",
+          "type": "STRING",
+          "destinations": ["SPAN", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PREFERRED", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "metrics": [
+        {
+          "name": "cambistapp.fx.exchange.requests",
+          "instrument": "COUNTER",
+          "unit": "1",
+          "description": "Successful exchange calculations",
+          "value": {
+            "source": "CONSTANT",
+            "argumentIndex": -1,
+            "path": "",
+            "constant": 1
+          },
+          "buckets": []
+        },
+        {
+          "name": "cambistapp.fx.currency.received",
+          "instrument": "COUNTER",
+          "unit": "1",
+          "description": "Source currency amount received",
+          "value": {
+            "source": "ARGUMENT",
+            "argumentIndex": 0,
+            "path": "amount",
+            "constant": 1
+          },
+          "buckets": []
+        },
+        {
+          "name": "cambistapp.fx.currency.delivered",
+          "instrument": "COUNTER",
+          "unit": "1",
+          "description": "Target currency amount delivered",
+          "value": {
+            "source": "RETURN",
+            "argumentIndex": -1,
+            "path": "targetAmount",
+            "constant": 1
+          },
+          "buckets": []
+        },
+        {
+          "name": "cambistapp.fx.request.amount",
+          "instrument": "HISTOGRAM",
+          "unit": "1",
+          "description": "Requested exchange amount distribution",
+          "value": {
+            "source": "ARGUMENT",
+            "argumentIndex": 0,
+            "path": "amount",
+            "constant": 1
+          },
+          "buckets": [100, 1000, 3000, 10000, 50000]
+        }
+      ],
+      "log": {
+        "enabled": false,
+        "severity": "INFO",
+        "body": "CambistApp exchange rate calculated"
+      }
+    }
+  ]
+}

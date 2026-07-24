@@ -1,0 +1,231 @@
+{
+  "schemaVersion": "1.5",
+  "messagingEventPolicies": [
+    {
+      "id": "quarkus-kafka-produced",
+      "ruleName": "Quarkus SmallRye Kafka produced exchange",
+      "scope": "KAFKA_PRODUCER",
+      "eventName": "quarkus-kafka-produced",
+      "conditions": [
+        {
+          "source": "DESTINATION",
+          "operator": "EQUALS",
+          "values": [
+            "o11y.quarkus.exchange"
+          ]
+        },
+        {
+          "source": "PAYLOAD",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": [
+            "APPROVED"
+          ]
+        }
+      ],
+      "maxPayloadBytes": 8192,
+      "fields": [
+        {
+          "source": "PAYLOAD",
+          "path": "amount",
+          "attribute": "test.quarkus.kafka.producer.amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus Kafka producer matched"
+      }
+    },
+    {
+      "id": "quarkus-kafka-consumed",
+      "ruleName": "Quarkus SmallRye Kafka consumed exchange",
+      "scope": "KAFKA_CONSUMER",
+      "eventName": "quarkus-kafka-consumed",
+      "conditions": [
+        {
+          "source": "DESTINATION",
+          "operator": "EQUALS",
+          "values": [
+            "o11y.quarkus.exchange"
+          ]
+        },
+        {
+          "source": "PAYLOAD",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": [
+            "APPROVED"
+          ]
+        }
+      ],
+      "maxPayloadBytes": 8192,
+      "fields": [
+        {
+          "source": "PAYLOAD",
+          "path": "amount",
+          "attribute": "test.quarkus.kafka.consumer.amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus Kafka consumer matched"
+      }
+    },
+    {
+      "id": "quarkus-jms-produced",
+      "ruleName": "Quarkus Artemis JMS produced exchange",
+      "scope": "JMS_PRODUCER",
+      "eventName": "quarkus-jms-produced",
+      "conditions": [
+        {
+          "source": "DESTINATION",
+          "operator": "EQUALS",
+          "values": [
+            "o11y.quarkus.exchange"
+          ]
+        },
+        {
+          "source": "PAYLOAD",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": [
+            "APPROVED"
+          ]
+        }
+      ],
+      "maxPayloadBytes": 8192,
+      "fields": [
+        {
+          "source": "PAYLOAD",
+          "path": "amount",
+          "attribute": "test.quarkus.jms.producer.amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus JMS producer matched"
+      }
+    },
+    {
+      "id": "quarkus-jms-consumed",
+      "ruleName": "Quarkus Artemis JMS consumed exchange",
+      "scope": "JMS_CONSUMER",
+      "eventName": "quarkus-jms-consumed",
+      "conditions": [
+        {
+          "source": "DESTINATION",
+          "operator": "EQUALS",
+          "values": [
+            "o11y.quarkus.exchange"
+          ]
+        },
+        {
+          "source": "MESSAGE_HEADER",
+          "path": "JMSType",
+          "operator": "EQUALS",
+          "values": [
+            "exchange.approved"
+          ]
+        },
+        {
+          "source": "MESSAGE_PROPERTY",
+          "path": "channel",
+          "operator": "EQUALS",
+          "values": [
+            "WEB"
+          ]
+        }
+      ],
+      "maxPayloadBytes": 8192,
+      "fields": [
+        {
+          "source": "PAYLOAD",
+          "path": "amount",
+          "attribute": "test.quarkus.jms.consumer.amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus JMS consumer matched"
+      }
+    }
+  ],
+  "messagingMetricPolicies": [
+    {
+      "id": "quarkus-kafka-produced-amount",
+      "eventName": "quarkus-kafka-produced",
+      "name": "o11y.quarkus.kafka.producer.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "PEN",
+      "valueField": "test.quarkus.kafka.producer.amount",
+      "buckets": [
+        100,
+        500,
+        1000
+      ]
+    },
+    {
+      "id": "quarkus-kafka-consumed-amount",
+      "eventName": "quarkus-kafka-consumed",
+      "name": "o11y.quarkus.kafka.consumer.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "PEN",
+      "valueField": "test.quarkus.kafka.consumer.amount",
+      "buckets": [
+        100,
+        500,
+        1000
+      ]
+    },
+    {
+      "id": "quarkus-jms-produced-amount",
+      "eventName": "quarkus-jms-produced",
+      "name": "o11y.quarkus.jms.producer.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "PEN",
+      "valueField": "test.quarkus.jms.producer.amount",
+      "buckets": [
+        100,
+        500,
+        1000
+      ]
+    },
+    {
+      "id": "quarkus-jms-consumed-amount",
+      "eventName": "quarkus-jms-consumed",
+      "name": "o11y.quarkus.jms.consumer.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "PEN",
+      "valueField": "test.quarkus.jms.consumer.amount",
+      "buckets": [
+        100,
+        500,
+        1000
+      ]
+    }
+  ]
+}

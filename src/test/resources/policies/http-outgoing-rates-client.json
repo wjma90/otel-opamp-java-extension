@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "1.3",
+  "requestHeaders": [{"name": "x-client-channel", "direction": "OUTGOING"}],
+  "responseHeaders": [{"name": "x-rate-type", "direction": "OUTGOING"}],
+  "deniedHeaders": [],
+  "deniedBodyPaths": [],
+  "metricPolicies": [],
+  "methodPolicies": [],
+  "bodyEventPolicies": [{
+    "id": "rates-client-approved-quote-v1",
+    "enabled": true,
+    "ruleName": "Approved quote returned by rates service",
+    "direction": "OUTGOING",
+    "requestContentType": "application/json",
+    "responseContentType": "application/json",
+    "conditions": [
+      {"source": "REQUEST_PATH", "path": "", "operator": "EQUALS", "values": ["/api/rates/quote"]},
+      {"source": "REQUEST_METHOD", "path": "", "operator": "EQUALS", "values": ["POST"]},
+      {"source": "RESPONSE_STATUS", "path": "", "operator": "EQUALS", "values": ["200"]}
+    ],
+    "eventName": "rates-quote-approved",
+    "staticAttributes": [{
+      "attribute": "event.type",
+      "value": "rates-quote-approved",
+      "type": "STRING",
+      "destinations": ["SPAN", "LOG"]
+    }],
+    "maxBodyBytes": 65536,
+    "fields": [
+      {
+        "attribute": "cambistapp.rates.source.amount",
+        "source": "REQUEST_BODY",
+        "path": "amount",
+        "type": "DOUBLE",
+        "destinations": ["SPAN", "LOG"],
+        "valuePolicy": {"type": "RANGE", "allowed": [], "fallback": "OTHER", "ranges": []}
+      },
+      {
+        "attribute": "cambistapp.rates.customer.type",
+        "source": "REQUEST_BODY",
+        "path": "customerType",
+        "type": "STRING",
+        "destinations": ["SPAN", "LOG", "METRIC"],
+        "valuePolicy": {"type": "ENUM", "allowed": ["SALARY_ACCOUNT", "STANDARD"], "fallback": "OTHER", "ranges": []}
+      },
+      {
+        "attribute": "cambistapp.rates.target.amount",
+        "source": "RESPONSE_BODY",
+        "path": "targetAmount",
+        "type": "DOUBLE",
+        "destinations": ["SPAN", "LOG"],
+        "valuePolicy": {"type": "RANGE", "allowed": [], "fallback": "OTHER", "ranges": []}
+      },
+      {
+        "attribute": "cambistapp.rates.rate.type",
+        "source": "RESPONSE_BODY",
+        "path": "rateType",
+        "type": "STRING",
+        "destinations": ["SPAN", "LOG", "METRIC"],
+        "valuePolicy": {"type": "ENUM", "allowed": ["PREFERRED", "STANDARD"], "fallback": "OTHER", "ranges": []}
+      }
+    ],
+    "derivedFields": [],
+    "log": {"enabled": true, "severity": "INFO", "body": "Rates service returned an approved quote"}
+  }],
+  "eventMetricPolicies": [
+    {
+      "id": "rates-client-quote-count-v1",
+      "enabled": true,
+      "eventName": "rates-quote-approved",
+      "name": "cambistapp.rates.quote.operations",
+      "instrument": "COUNTER",
+      "unit": "{operation}",
+      "description": "Approved rate quotes observed by the outbound HTTP client",
+      "valueField": "",
+      "dimensions": ["cambistapp.rates.customer.type", "cambistapp.rates.rate.type"],
+      "buckets": []
+    },
+    {
+      "id": "rates-client-source-amount-v1",
+      "enabled": true,
+      "eventName": "rates-quote-approved",
+      "name": "cambistapp.rates.source.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "{PEN}",
+      "description": "Source amount quoted through the outbound rates client",
+      "valueField": "cambistapp.rates.source.amount",
+      "dimensions": ["cambistapp.rates.customer.type", "cambistapp.rates.rate.type"],
+      "buckets": [100, 500, 1000, 3000, 10000]
+    }
+  ]
+}

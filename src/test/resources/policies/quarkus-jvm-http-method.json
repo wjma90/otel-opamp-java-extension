@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "1.5",
+  "requestHeaders": [
+    {
+      "name": "x-client-segment",
+      "direction": "INCOMING"
+    }
+  ],
+  "responseHeaders": [
+    {
+      "name": "x-rate-type",
+      "direction": "INCOMING"
+    }
+  ],
+  "metricPolicies": [],
+  "methodPolicies": [
+    {
+      "id": "quarkus-exchange-method-v1",
+      "enabled": true,
+      "packagePrefix": "dev.o11y.quarkus.method",
+      "className": "dev.o11y.quarkus.method.ExchangeCalculator",
+      "methodName": "convert",
+      "captures": [
+        {
+          "source": "ARGUMENT",
+          "argumentIndex": 0,
+          "path": "",
+          "constant": 1,
+          "attribute": "quarkus.exchange.method.source.amount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "source": "RETURN",
+          "argumentIndex": -1,
+          "path": "",
+          "constant": 1,
+          "attribute": "quarkus.exchange.method.target.amount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "metrics": [
+        {
+          "name": "quarkus.exchange.method.target.amount",
+          "instrument": "HISTOGRAM",
+          "unit": "{USD}",
+          "description": "Quarkus JVM method result",
+          "value": {
+            "source": "RETURN",
+            "argumentIndex": -1,
+            "path": "",
+            "constant": 1
+          },
+          "buckets": [100, 500, 1000]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus exchange method matched"
+      }
+    }
+  ],
+  "bodyEventPolicies": [
+    {
+      "id": "quarkus-rest-exchange-v1",
+      "enabled": true,
+      "ruleName": "Quarkus REST exchange",
+      "direction": "INCOMING",
+      "requestContentType": "application/json",
+      "responseContentType": "application/json",
+      "conditions": [
+        {
+          "source": "REQUEST_PATH",
+          "path": "",
+          "operator": "EQUALS",
+          "values": ["/api/exchanges/{accountId}"]
+        },
+        {
+          "source": "REQUEST_METHOD",
+          "path": "",
+          "operator": "EQUALS",
+          "values": ["POST"]
+        },
+        {
+          "source": "REQUEST_HEADER",
+          "path": "x-client-segment",
+          "operator": "EQUALS",
+          "values": ["SALARY_ACCOUNT"]
+        },
+        {
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "operator": "EQUALS",
+          "values": ["JULY"]
+        },
+        {
+          "source": "REQUEST_PATH_PARAM",
+          "path": "accountId",
+          "operator": "EQUALS",
+          "values": ["acct-42"]
+        },
+        {
+          "source": "REQUEST_BODY",
+          "path": "marker",
+          "operator": "EQUALS",
+          "values": ["request-intact"]
+        },
+        {
+          "source": "RESPONSE_STATUS",
+          "path": "",
+          "operator": "IN",
+          "values": ["201"]
+        },
+        {
+          "source": "RESPONSE_HEADER",
+          "path": "x-rate-type",
+          "operator": "EQUALS",
+          "values": ["QUARKUS_LTS"]
+        },
+        {
+          "source": "RESPONSE_BODY",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": ["APPROVED"]
+        },
+        {
+          "source": "RESPONSE_BODY",
+          "path": "marker",
+          "operator": "EQUALS",
+          "values": ["request-intact"]
+        }
+      ],
+      "eventName": "quarkus-rest-exchange",
+      "staticAttributes": [
+        {
+          "attribute": "event.name",
+          "value": "quarkus.exchange",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG"]
+        }
+      ],
+      "maxBodyBytes": 65536,
+      "fields": [
+        {
+          "attribute": "quarkus.client.segment",
+          "source": "REQUEST_HEADER",
+          "path": "x-client-segment",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["SALARY_ACCOUNT", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.request.campaign",
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["JULY"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.account.id",
+          "source": "REQUEST_PATH_PARAM",
+          "path": "accountId",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["acct-42"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.client.channel",
+          "source": "REQUEST_BODY",
+          "path": "channel",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["WEB"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.exchange.source.amount",
+          "source": "REQUEST_BODY",
+          "path": "amount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.rate.type",
+          "source": "RESPONSE_HEADER",
+          "path": "x-rate-type",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["QUARKUS_LTS"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "quarkus.exchange.target.amount",
+          "source": "RESPONSE_BODY",
+          "path": "targetAmount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "derivedFields": [],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Quarkus REST exchange matched"
+      }
+    }
+  ],
+  "eventMetricPolicies": [
+    {
+      "id": "quarkus-rest-exchange-count-v1",
+      "enabled": true,
+      "eventName": "quarkus-rest-exchange",
+      "name": "quarkus.rest.exchange.operations",
+      "instrument": "COUNTER",
+      "unit": "{operation}",
+      "description": "Quarkus REST exchanges",
+      "valueField": "",
+      "dimensions": [
+        "quarkus.client.segment",
+        "quarkus.request.campaign",
+        "quarkus.account.id",
+        "quarkus.client.channel",
+        "quarkus.rate.type"
+      ],
+      "buckets": []
+    }
+  ],
+  "messagingEventPolicies": [],
+  "messagingMetricPolicies": []
+}

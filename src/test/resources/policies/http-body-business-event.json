@@ -1,0 +1,317 @@
+{
+  "schemaVersion": "1.6",
+  "requestHeaders": [],
+  "responseHeaders": [],
+  "metricPolicies": [],
+  "methodPolicies": [],
+  "bodyEventPolicies": [
+    {
+      "id": "cambistapp-approved-exchange-v1",
+      "enabled": true,
+      "ruleName": "Approved currency exchange",
+      "direction": "INCOMING",
+      "requestContentType": "application/json",
+      "responseContentType": "application/json",
+      "conditions": [
+        {
+          "source": "REQUEST_PATH",
+          "path": "",
+          "operator": "EQUALS",
+          "values": ["/api/exchanges"]
+        },
+        {
+          "source": "REQUEST_METHOD",
+          "path": "",
+          "operator": "EQUALS",
+          "values": ["POST"]
+        },
+        {
+          "source": "REQUEST_HEADER",
+          "path": "x-client-segment",
+          "operator": "EQUALS",
+          "values": ["SALARY_ACCOUNT"]
+        },
+        {
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "operator": "EQUALS",
+          "values": ["JULY"]
+        },
+        {
+          "source": "REQUEST_BODY",
+          "path": "operation",
+          "operator": "EQUALS",
+          "values": ["EXCHANGE"]
+        },
+        {
+          "source": "REQUEST_BODY",
+          "path": "sourceCurrency",
+          "operator": "EQUALS",
+          "values": ["PEN"]
+        },
+        {
+          "source": "REQUEST_BODY",
+          "path": "targetCurrency",
+          "operator": "EQUALS",
+          "values": ["USD"]
+        },
+        {
+          "source": "RESPONSE_STATUS",
+          "path": "",
+          "operator": "IN",
+          "values": ["200", "201"]
+        },
+        {
+          "source": "RESPONSE_HEADER",
+          "path": "x-rate-source",
+          "operator": "EQUALS",
+          "values": ["INTERNAL"]
+        },
+        {
+          "source": "RESPONSE_BODY",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": ["APPROVED"]
+        }
+      ],
+      "eventName": "currency-exchange-approved",
+      "staticAttributes": [
+        {
+          "attribute": "event.provider",
+          "value": "cambistapp-api",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG"]
+        },
+        {
+          "attribute": "event.type",
+          "value": "currency-exchange-approved",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG"]
+        }
+      ],
+      "maxBodyBytes": 65536,
+      "fields": [
+        {
+          "attribute": "cambistapp.client.segment",
+          "source": "REQUEST_HEADER",
+          "path": "x-client-segment",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["SALARY_ACCOUNT", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.request.campaign",
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["JULY", "AUGUST"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.rate.source",
+          "source": "RESPONSE_HEADER",
+          "path": "x-rate-source",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["INTERNAL", "PARTNER"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.client.channel",
+          "source": "REQUEST_BODY",
+          "path": "channel",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["WEB", "MOBILE", "API", "LOAD_TEST"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.operation.name",
+          "source": "REQUEST_BODY",
+          "path": "operation",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["EXCHANGE"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.source.amount",
+          "source": "REQUEST_BODY",
+          "path": "amount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.source.currency",
+          "source": "REQUEST_BODY",
+          "path": "sourceCurrency",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PEN", "USD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.target.currency",
+          "source": "REQUEST_BODY",
+          "path": "targetCurrency",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PEN", "USD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.customer.type",
+          "source": "RESPONSE_BODY",
+          "path": "customerType",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["SALARY_ACCOUNT", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.result",
+          "source": "RESPONSE_BODY",
+          "path": "status",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["APPROVED"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.target.amount",
+          "source": "RESPONSE_BODY",
+          "path": "receivedAmount",
+          "type": "DOUBLE",
+          "destinations": ["SPAN", "LOG"],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "cambistapp.currency_exchange.rate.type",
+          "source": "RESPONSE_BODY",
+          "path": "rateType",
+          "type": "STRING",
+          "destinations": ["SPAN", "LOG", "METRIC"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["PREFERRED", "STANDARD"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Currency exchange approved"
+      }
+    }
+  ],
+  "eventMetricPolicies": [
+    {
+      "id": "cambistapp-approved-exchange-count-v1",
+      "enabled": true,
+      "eventName": "currency-exchange-approved",
+      "name": "cambistapp.currency_exchange.operations",
+      "instrument": "COUNTER",
+      "unit": "{operation}",
+      "description": "Completed PEN to USD currency exchange operations",
+      "valueField": "",
+      "dimensions": [
+        "cambistapp.client.channel",
+        "cambistapp.customer.type",
+        "cambistapp.currency_exchange.rate.type",
+        "cambistapp.client.segment",
+        "cambistapp.request.campaign",
+        "cambistapp.currency_exchange.rate.source"
+      ],
+      "standardAttributes": [
+        "http.request.method",
+        "http.route",
+        "http.response.status_code",
+        "error.type"
+      ],
+      "buckets": []
+    },
+    {
+      "id": "cambistapp-approved-exchange-source-amount-v1",
+      "enabled": true,
+      "eventName": "currency-exchange-approved",
+      "name": "cambistapp.currency_exchange.source.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "{PEN}",
+      "description": "Distribution and sum of PEN received in completed PEN to USD exchanges",
+      "valueField": "cambistapp.currency_exchange.source.amount",
+      "dimensions": [
+        "cambistapp.client.channel",
+        "cambistapp.customer.type",
+        "cambistapp.currency_exchange.rate.type"
+      ],
+      "buckets": [100, 500, 1000, 3000, 10000, 50000]
+    },
+    {
+      "id": "cambistapp-approved-exchange-target-amount-v1",
+      "enabled": true,
+      "eventName": "currency-exchange-approved",
+      "name": "cambistapp.currency_exchange.target.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "{USD}",
+      "description": "Distribution and sum of USD delivered in completed PEN to USD exchanges",
+      "valueField": "cambistapp.currency_exchange.target.amount",
+      "dimensions": [
+        "cambistapp.client.channel",
+        "cambistapp.customer.type",
+        "cambistapp.currency_exchange.rate.type"
+      ],
+      "buckets": [25, 100, 250, 500, 1000, 3000, 10000]
+    }
+  ]
+}

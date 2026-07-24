@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.5",
+  "messagingEventPolicies": [
+    {
+      "id": "kafka-exchange-approved",
+      "enabled": true,
+      "ruleName": "Approved exchange command",
+      "scope": "KAFKA_PRODUCER",
+      "conditions": [
+        {
+          "source": "DESTINATION",
+          "operator": "EQUALS",
+          "values": [
+            "exchange.approved"
+          ]
+        },
+        {
+          "source": "PAYLOAD",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": [
+            "APPROVED"
+          ]
+        }
+      ],
+      "eventName": "exchange-approved-produced",
+      "staticAttributes": [
+        {
+          "attribute": "event.name",
+          "value": "cambistapp.exchange.approved",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "maxPayloadBytes": 8192,
+      "fields": [
+        {
+          "attribute": "client.channel",
+          "source": "MESSAGE_HEADER",
+          "path": "x-client-channel",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG",
+            "METRIC"
+          ],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": [
+              "WEB",
+              "API"
+            ],
+            "fallback": "OTHER"
+          }
+        },
+        {
+          "attribute": "exchange.amount",
+          "source": "PAYLOAD",
+          "path": "amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Approved exchange command produced"
+      }
+    }
+  ],
+  "messagingMetricPolicies": [
+    {
+      "id": "kafka-exchange-amount",
+      "enabled": true,
+      "eventName": "exchange-approved-produced",
+      "name": "cambistapp.messaging.exchange.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "PEN",
+      "description": "Approved exchange amount submitted to Kafka",
+      "valueField": "exchange.amount",
+      "dimensions": [
+        "client.channel"
+      ],
+      "buckets": [
+        100,
+        500,
+        1000,
+        5000,
+        10000
+      ]
+    }
+  ]
+}

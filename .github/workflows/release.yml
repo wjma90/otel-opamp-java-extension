@@ -1,0 +1,561 @@
+name: O11y Java Agent release
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: java-agent-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+
+env:
+  SEMGREP_IMAGE: semgrep/semgrep:1.169.0@sha256:2b33f46ba66cf8cc2ad59ccfa7d22951fd00c632c38f1339e84ec8e6e641a942
+  SEMGREP_RULES_COMMIT: 647d58eb2e085440618782963ff094178d98d2fe
+  SEMGREP_RULES_SHA256: 4e655be3027b6ce5c5d44813580b7649d66be3dcdf44e7375102a139650f99f6
+  SEMGREP_RULES_URL: https://codeload.github.com/semgrep/semgrep-rules/tar.gz/647d58eb2e085440618782963ff094178d98d2fe
+  TRIVY_IMAGE: aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+
+jobs:
+  verify:
+    name: Verify and package JAR
+    runs-on: ubuntu-24.04
+    outputs:
+      agent_sha256: ${{ steps.stage.outputs.agent_sha256 }}
+      extension_version: ${{ steps.metadata.outputs.extension_version }}
+      otel_agent_version: ${{ steps.metadata.outputs.otel_agent_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve and validate release metadata
+        id: metadata
+        run: |
+          set -euo pipefail
+
+          extension_version="$(python3 -c 'import xml.etree.ElementTree as ET; root = ET.parse("pom.xml").getroot(); ns = {"m": "http://maven.apache.org/POM/4.0.0"}; print(root.find("m:properties/m:revision", ns).text.strip())')"
+          pom_agent_version="$(python3 -c 'import xml.etree.ElementTree as ET; root = ET.parse("pom.xml").getroot(); ns = {"m": "http://maven.apache.org/POM/4.0.0"}; print(root.find("m:properties/m:opentelemetry.javaagent.version", ns).text.strip())')"
+          pinned_agent_version="$(awk -F= '$1 == "otel.javaagent.version" { print $2 }' release.properties)"
+          pinned_agent_sha256="$(awk -F= '$1 == "otel.javaagent.sha256" { print $2 }' release.properties)"
+          docker_extension_version="$(awk -F= '$1 == "ARG EXTENSION_VERSION" { print $2; exit }' Dockerfile)"
+          docker_agent_version="$(awk -F= '$1 == "ARG OTEL_AGENT_VERSION" { print $2; exit }' Dockerfile)"
+          if [[ -z "${extension_version}" ]]; then
+            echo "pom.xml does not define revision" >&2
+            exit 1
+          fi
+          if [[ "${pom_agent_version}" != "${pinned_agent_version}" ]]; then
+            echo "pom.xml and release.properties must pin the same OpenTelemetry Java Agent" >&2
+            exit 1
+          fi
+          if [[ "${docker_extension_version}" != "${extension_version}" ]]; then
+            echo "Dockerfile EXTENSION_VERSION must be ${extension_version}" >&2
+            exit 1
+          fi
+          if [[ "${docker_agent_version}" != "${pinned_agent_version}" ]]; then
+            echo "Dockerfile OTEL_AGENT_VERSION must be ${pinned_agent_version}" >&2
+            exit 1
+          fi
+          escaped_agent_version="${pinned_agent_version//./\\.}"
+          if [[ ! "${extension_version}" =~ ^${escaped_agent_version}-o11y\.[1-9][0-9]*$ ]]; then
+            echo "extension version ${extension_version} must identify its compatible agent as ${pinned_agent_version}-o11y.N" >&2
+            exit 1
+          fi
+          if [[ ! "${pinned_agent_sha256}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "release.properties does not contain a valid SHA-256" >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            expected="${GITHUB_REF_NAME#v}"
+            if [[ "${expected}" == "${GITHUB_REF_NAME}" || "${expected}" != "${extension_version}" ]]; then
+              echo "tag ${GITHUB_REF_NAME} must be v${extension_version}" >&2
+              exit 1
+            fi
+          fi
+
+          {
+            echo "extension_version=${extension_version}"
+            echo "otel_agent_version=${pinned_agent_version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Verify the oldest certified Servlet and Spring clients
+        env:
+          MAVEN_ARGS: -Dstyle.color=never
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+          OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
+        run: |
+          ./mvnw -B -ntp \
+            -Drevision="${EXTENSION_VERSION}" \
+            -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
+            -Dspotbugs.skip=true \
+            -Djakarta-servlet.version=6.0.0 \
+            -Dtomcat-embed.version=10.1.0 \
+            -Dspring-framework.version=6.1.0 \
+            clean verify
+
+      - name: Run baseline tests, packaging, agent smoke tests and SpotBugs
+        env:
+          MAVEN_ARGS: -Dstyle.color=never
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+          OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
+        run: |
+          ./mvnw -B -ntp \
+            -Drevision="${EXTENSION_VERSION}" \
+            -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
+            clean verify
+
+      - name: Upload SpotBugs reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-extension-spotbugs
+          path: |
+            target/security/spotbugs.xml
+            target/security/spotbugs.sarif.json
+            config/spotbugs-exclude.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Verify Quarkus REST JVM over HTTP/1.1, methods, Kafka and JMS
+        env:
+          MAVEN_ARGS: -Dstyle.color=never
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+          OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
+        run: |
+          ./mvnw -B -ntp \
+            -Pquarkus-smoke \
+            -Drevision="${EXTENSION_VERSION}" \
+            -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
+            -Dspotbugs.skip=true \
+            -Dquarkus.smoke.version=3.33.2.1 \
+            -Dquarkus.smoke.stack=quarkus-rest \
+            clean verify
+
+      - name: Verify RESTEasy Classic JVM on Undertow over HTTP/1.1
+        env:
+          MAVEN_ARGS: -Dstyle.color=never
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+          OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
+        run: |
+          ./mvnw -B -ntp \
+            -Pquarkus-smoke \
+            -Drevision="${EXTENSION_VERSION}" \
+            -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
+            -Dspotbugs.skip=true \
+            -Dquarkus.smoke.version=3.33.2.1 \
+            -Dquarkus.smoke.stack=resteasy-classic-undertow \
+            clean verify
+
+      - name: Stage release JAR and resolve official agent checksum
+        id: stage
+        env:
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+        run: |
+          set -euo pipefail
+
+          release_dir="${GITHUB_WORKSPACE}/release/java-extension"
+          install -d "${release_dir}"
+          install -m 0444 \
+            "target/java-agent-extension-${EXTENSION_VERSION}.jar" \
+            "${release_dir}/o11y-java-agent-extension-${EXTENSION_VERSION}.jar"
+
+          expected_sha256="$(awk -F= '$1 == "otel.javaagent.sha256" { print $2 }' release.properties)"
+          actual_sha256="$(sha256sum target/agent/opentelemetry-javaagent.jar | awk '{print $1}')"
+          if [[ "${actual_sha256}" != "${expected_sha256}" ]]; then
+            echo "official OpenTelemetry Java Agent checksum does not match release.properties" >&2
+            exit 1
+          fi
+          echo "agent_sha256=${expected_sha256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate SPDX SBOM for the JAR
+        uses: anchore/sbom-action@v0
+        with:
+          path: release/java-extension
+          format: spdx-json
+          output-file: release/java-extension/o11y-java-agent-extension-${{ steps.metadata.outputs.extension_version }}.spdx.json
+          upload-artifact: false
+
+      - name: Generate checksums
+        env:
+          EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
+        run: |
+          set -euo pipefail
+          release_dir="${GITHUB_WORKSPACE}/release/java-extension"
+          cd "${release_dir}"
+          sha256sum \
+            "o11y-java-agent-extension-${EXTENSION_VERSION}.jar" \
+            "o11y-java-agent-extension-${EXTENSION_VERSION}.spdx.json" \
+            > SHA256SUMS
+
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-extension-${{ steps.metadata.outputs.extension_version }}
+          path: release/java-extension/*
+          if-no-files-found: error
+          retention-days: 14
+
+  source-security:
+    name: Semgrep and Trivy source gate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        id: source-checkout
+        uses: actions/checkout@v4
+
+      - name: Download and verify the pinned Semgrep ruleset
+        shell: bash
+        run: |
+          set -euo pipefail
+          security_dir="${RUNNER_TEMP}/java-extension-source-security"
+          archive="${security_dir}/semgrep-rules.tar.gz"
+          report_dir="${security_dir}/reports"
+          rules_dir="${security_dir}/semgrep-rules"
+          mkdir -p "${report_dir}" "${rules_dir}"
+          curl --fail --silent --show-error --location \
+            --retry 3 \
+            "${SEMGREP_RULES_URL}" \
+            --output "${archive}"
+          printf '%s  %s\n' \
+            "${SEMGREP_RULES_SHA256}" \
+            "${archive}" \
+            | sha256sum --check --strict -
+          tar --extract --gzip \
+            --file "${archive}" \
+            --directory "${rules_dir}" \
+            --strip-components=1
+          sha256sum "${archive}" \
+            > "${report_dir}/semgrep-rules.sha256"
+          printf '%s\n' "${SEMGREP_RULES_COMMIT}" \
+            > "${report_dir}/semgrep-rules.commit"
+
+      - name: Run pinned Semgrep offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          security_dir="${RUNNER_TEMP}/java-extension-source-security"
+          report_dir="${security_dir}/reports"
+          rules_dir="${security_dir}/semgrep-rules"
+          mounts=(
+            -v "${PWD}:/src:ro"
+            -v "${report_dir}:/reports"
+            -v "${rules_dir}:/rules:ro"
+            -w /src
+          )
+          docker run --rm --network none "${mounts[@]}" "${SEMGREP_IMAGE}" \
+            semgrep scan \
+              --config /rules/java \
+              --config /rules/generic \
+              --config /rules/bash \
+              --config /rules/json \
+              --metrics=off --disable-version-check --oss-only \
+              --exclude target --exclude mvnw \
+              --disable-nosem --error \
+              --json-output=/reports/semgrep.json
+          test -s "${report_dir}/semgrep.json"
+
+      - name: Warm Trivy data without mounting source
+        if: always() && steps.source-checkout.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          security_dir="${RUNNER_TEMP}/java-extension-source-security"
+          report_dir="${security_dir}/reports"
+          empty_dir="${security_dir}/trivy-bootstrap-empty"
+          cache_dir="${security_dir}/trivy-cache"
+          mkdir -p "${report_dir}" "${empty_dir}" "${cache_dir}"
+          cache_mount=(-v "${cache_dir}:/root/.cache/trivy")
+          empty_mount=(-v "${empty_dir}:/empty:ro")
+          docker run --rm "${cache_mount[@]}" "${empty_mount[@]}" \
+            "${TRIVY_IMAGE}" \
+            fs --download-db-only --no-progress /empty
+          docker run --rm "${cache_mount[@]}" "${empty_mount[@]}" \
+            "${TRIVY_IMAGE}" \
+            fs --download-java-db-only --no-progress /empty
+          docker run --rm "${cache_mount[@]}" "${empty_mount[@]}" \
+            "${TRIVY_IMAGE}" \
+            fs --scanners misconfig --disable-telemetry \
+              --skip-db-update --skip-java-db-update --skip-version-check \
+              --format json --output /dev/null /empty
+          docker run --rm "${cache_mount[@]}" "${TRIVY_IMAGE}" \
+            version --format json \
+            > "${report_dir}/trivy-metadata.json"
+          test -s "${report_dir}/trivy-metadata.json"
+
+      - name: Scan the component filesystem with pinned Trivy offline
+        if: always() && steps.source-checkout.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          security_dir="${RUNNER_TEMP}/java-extension-source-security"
+          report_dir="${security_dir}/reports"
+          cache_dir="${security_dir}/trivy-cache"
+          mkdir -p "${report_dir}" "${cache_dir}"
+          mounts=(
+            -v "${PWD}:/workspace:ro"
+            -v "${report_dir}:/reports"
+            -v "${cache_dir}:/root/.cache/trivy"
+          )
+          offline_flags=(
+            --disable-telemetry
+            --offline-scan
+            --skip-check-update
+            --skip-db-update
+            --skip-java-db-update
+            --skip-vex-repo-update
+            --skip-version-check
+          )
+          docker run --rm --network none "${mounts[@]}" "${TRIVY_IMAGE}" \
+            fs "${offline_flags[@]}" --scanners vuln,secret,misconfig \
+            --skip-dirs /workspace/target \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --format json --output /reports/trivy-filesystem.json \
+            /workspace
+          test -s "${report_dir}/trivy-filesystem.json"
+          docker run --rm --network none "${mounts[@]}" "${TRIVY_IMAGE}" \
+            fs "${offline_flags[@]}" --scanners vuln,secret,misconfig \
+            --skip-dirs /workspace/target \
+            --severity HIGH,CRITICAL --exit-code 1 \
+            /workspace
+
+      - name: Upload source security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-extension-source-security
+          path: ${{ runner.temp }}/java-extension-source-security/reports/*
+          if-no-files-found: warn
+          retention-days: 30
+
+  images:
+    name: Publish multi-architecture images
+    if: github.ref_type == 'tag'
+    needs:
+      - verify
+      - source-security
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      extension_digest: ${{ steps.extension-image.outputs.digest }}
+      extension_image: ${{ steps.names.outputs.extension }}
+      javaagent_digest: ${{ steps.javaagent-image.outputs.digest }}
+      javaagent_image: ${{ steps.names.outputs.javaagent }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve GHCR image names
+        id: names
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "extension=ghcr.io/${owner}/o11y-java-agent-extension" >> "${GITHUB_OUTPUT}"
+          echo "javaagent=ghcr.io/${owner}/o11y-java-agent" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Publish extension-only image
+        id: extension-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: extension-runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.names.outputs.extension }}:${{ needs.verify.outputs.extension_version }}
+          build-args: |
+            EXTENSION_VERSION=${{ needs.verify.outputs.extension_version }}
+            OTEL_AGENT_VERSION=${{ needs.verify.outputs.otel_agent_version }}
+            OTEL_AGENT_SHA256=${{ needs.verify.outputs.agent_sha256 }}
+          cache-from: type=gha,scope=java-extension
+          cache-to: type=gha,mode=max,scope=java-extension
+          provenance: mode=max
+          sbom: true
+
+      - name: Publish embedded Java Agent image
+        id: javaagent-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: javaagent-runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.names.outputs.javaagent }}:${{ needs.verify.outputs.extension_version }}
+          build-args: |
+            EXTENSION_VERSION=${{ needs.verify.outputs.extension_version }}
+            OTEL_AGENT_VERSION=${{ needs.verify.outputs.otel_agent_version }}
+            OTEL_AGENT_SHA256=${{ needs.verify.outputs.agent_sha256 }}
+          cache-from: type=gha,scope=java-agent
+          cache-to: type=gha,mode=max,scope=java-agent
+          provenance: mode=max
+          sbom: true
+
+  scan-images:
+    name: Scan ${{ matrix.image }} on linux/${{ matrix.arch }}
+    if: github.ref_type == 'tag'
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - extension
+          - javaagent
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve immutable image
+        id: subject
+        env:
+          EXTENSION_DIGEST: ${{ needs.images.outputs.extension_digest }}
+          EXTENSION_IMAGE: ${{ needs.images.outputs.extension_image }}
+          JAVAAGENT_DIGEST: ${{ needs.images.outputs.javaagent_digest }}
+          JAVAAGENT_IMAGE: ${{ needs.images.outputs.javaagent_image }}
+          IMAGE_KIND: ${{ matrix.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${IMAGE_KIND}" == "extension" ]]; then
+            echo "reference=${EXTENSION_IMAGE}@${EXTENSION_DIGEST}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "reference=${JAVAAGENT_IMAGE}@${JAVAAGENT_DIGEST}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Scan image and enforce the release gate
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE_KIND: ${{ matrix.image }}
+          IMAGE_REFERENCE: ${{ steps.subject.outputs.reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports trivy-cache
+          report="reports/${IMAGE_KIND}-linux-${ARCH}.json"
+          mounts=(
+            -v "${HOME}/.docker:/root/.docker:ro"
+            -v "${PWD}/reports:/reports"
+            -v "${PWD}/trivy-cache:/root/.cache/trivy"
+          )
+          docker run --rm "${mounts[@]}" "${TRIVY_IMAGE}" \
+            image --platform "linux/${ARCH}" \
+            --scanners vuln,secret,misconfig \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --format json --output "/reports/${IMAGE_KIND}-linux-${ARCH}.json" \
+            "${IMAGE_REFERENCE}"
+          test -s "${report}"
+          docker run --rm "${mounts[@]}" "${TRIVY_IMAGE}" \
+            image --platform "linux/${ARCH}" \
+            --scanners vuln,secret,misconfig \
+            --severity HIGH,CRITICAL --exit-code 1 \
+            "${IMAGE_REFERENCE}"
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-${{ matrix.image }}-scan-linux-${{ matrix.arch }}
+          path: reports/*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    if: github.ref_type == 'tag'
+    needs:
+      - verify
+      - images
+      - scan-images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download verified assets
+        uses: actions/download-artifact@v4
+        with:
+          name: java-extension-${{ needs.verify.outputs.extension_version }}
+          path: release
+
+      - name: Compose release notes
+        env:
+          EXTENSION_DIGEST: ${{ needs.images.outputs.extension_digest }}
+          EXTENSION_IMAGE: ${{ needs.images.outputs.extension_image }}
+          JAVAAGENT_DIGEST: ${{ needs.images.outputs.javaagent_digest }}
+          JAVAAGENT_IMAGE: ${{ needs.images.outputs.javaagent_image }}
+          EXTENSION_VERSION: ${{ needs.verify.outputs.extension_version }}
+          OTEL_AGENT_VERSION: ${{ needs.verify.outputs.otel_agent_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          component="${RUNNER_TEMP}/component-notes.md"
+          bash \
+            scripts/extract-release-notes.sh \
+            "${EXTENSION_VERSION}" \
+            CHANGELOG.md \
+            > "${component}"
+
+          {
+            cat "${component}"
+            echo
+            echo "## OCI images"
+            echo
+            echo "- \`${EXTENSION_IMAGE}:${EXTENSION_VERSION}@${EXTENSION_DIGEST}\`"
+            echo "- \`${JAVAAGENT_IMAGE}:${EXTENSION_VERSION}@${JAVAAGENT_DIGEST}\`"
+            echo
+            echo "Compatible OpenTelemetry Java Agent: \`${OTEL_AGENT_VERSION}\`."
+          } > release-notes.md
+
+      - name: Create immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXTENSION_VERSION: ${{ needs.verify.outputs.extension_version }}
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release/* \
+            --verify-tag \
+            --title "O11y Java Agent Extension ${EXTENSION_VERSION}" \
+            --notes-file release-notes.md

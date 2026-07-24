@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.3",
+  "requestHeaders": [
+    { "name": "x-client-channel" }
+  ],
+  "responseHeaders": [
+    { "name": "x-rate-type" },
+    { "name": "x-rate-date" },
+    { "name": "x-rate-markup-bps" }
+  ],
+  "metricPolicies": [
+    {
+      "id": "cambistapp-http-channel-v1",
+      "enabled": true,
+      "value": {
+        "source": "DURATION",
+        "argumentIndex": -1,
+        "path": "",
+        "constant": 1
+      },
+      "name": "cambistapp.http.server.request.duration",
+      "instrument": "HISTOGRAM",
+      "unit": "s",
+      "description": "HTTP server duration by bounded client channel",
+      "standardAttributes": [
+        "http.request.method",
+        "http.response.status_code",
+        "http.route"
+      ],
+      "customAttributes": [
+        {
+          "source": "REQUEST_HEADER",
+          "argumentIndex": -1,
+          "path": "",
+          "constant": 1,
+          "header": "x-client-channel",
+          "attribute": "client.channel",
+          "destinations": ["SPAN"],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": ["WEB", "API", "LOAD_TEST"],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "buckets": [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1,
+        2.5,
+        5,
+        10
+      ]
+    }
+  ],
+  "methodPolicies": []
+}

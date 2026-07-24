@@ -1,0 +1,12 @@
+dev.o11y.agent.method.DynamicMethodInstrumentationModule
+dev.o11y.agent.servlet.DynamicServletInstrumentationModule
+dev.o11y.agent.servlet.javax.JavaxServletInstrumentationModule
+dev.o11y.agent.http.server.quarkus.QuarkusRestInstrumentationModule
+dev.o11y.agent.http.client.spring.SpringRestClientInstrumentationModule
+dev.o11y.agent.http.client.apache4.ApacheHttpClientInstrumentationModule
+dev.o11y.agent.http.client.okhttp.OkHttpClientInstrumentationModule
+dev.o11y.agent.http.client.webclient.SpringWebClientInstrumentationModule
+dev.o11y.agent.http.client.jdk.JdkHttpClientInstrumentationModule
+dev.o11y.agent.http.client.apache5.Apache5HttpClientInstrumentationModule
+dev.o11y.agent.messaging.kafka.KafkaMessagingInstrumentationModule
+dev.o11y.agent.messaging.jms.JmsMessagingInstrumentationModule

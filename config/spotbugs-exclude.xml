@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Startup and fault-injection paths intentionally propagate runtime failure. -->
+  <Match>
+    <Class name="dev.o11y.agent.O11yOpampExtension"/>
+    <Method name="start" params="" returns="void"/>
+    <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.apache4.ApacheHttpClientBridge$FaultingInputStream"/>
+    <Method name="fail" params="" returns="void"/>
+    <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.spring.SpringRestClientBridge$FaultingInputStream"/>
+    <Method name="fail" params="" returns="void"/>
+    <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+  </Match>
+
+  <!-- Reflective bridges must preserve the original Throwable contract. -->
+  <Match>
+    <Class name="dev.o11y.agent.http.client.ReflectiveHttpAccess"/>
+    <Method name="invoke"
+            params="java.lang.Object,java.lang.String,java.lang.Class,java.lang.Object"
+            returns="java.lang.Object"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.ReflectiveHttpAccess"/>
+    <Method name="invoke"
+            params="java.lang.Object,java.lang.String,java.lang.Class,java.lang.Object,java.lang.Class,java.lang.Object"
+            returns="java.lang.Object"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.apache4.ApacheHttpClientBridge"/>
+    <Method name="invoke"
+            params="java.lang.reflect.Method,java.lang.Object,java.lang.Object[]"
+            returns="java.lang.Object"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.okhttp.OkHttpClientBridge"/>
+    <Method name="invoke"
+            params="java.lang.reflect.Method,java.lang.Object,java.lang.Object[]"
+            returns="java.lang.Object"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.spring.SpringRestClientBridge$RequestInterceptorHandler"/>
+    <Method name="execute"
+            params="java.lang.Object,java.lang.Object,byte[]"
+            returns="java.lang.Object"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.DynamicPolicy"/>
+    <Method name="parse"
+            params="java.lang.String"
+            returns="dev.o11y.agent.policy.DynamicPolicy"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.DynamicPolicy"/>
+    <Method name="toJson"
+            params="dev.o11y.agent.policy.DynamicPolicy"
+            returns="java.lang.String"/>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+  </Match>
+
+  <!-- Null byte arrays are sentinels for unavailable or unsafe captures. -->
+  <Match>
+    <Class name="dev.o11y.agent.http.client.apache4.ApacheHttpClientBridge"/>
+    <Method name="captureAndReplaceResponseEntity"
+            params="java.lang.Object,int"
+            returns="byte[]"/>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.okhttp.OkHttpClientBridge"/>
+    <Method name="bytesBeforeInvocation"
+            params="java.lang.String,java.lang.Object[],int"
+            returns="byte[]"/>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.okhttp.OkHttpClientBridge"/>
+    <Method name="writeArguments"
+            params="java.lang.Object[],int"
+            returns="byte[]"/>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.runtime.HttpBodyPolicyEngine"/>
+    <Method name="decodeBody"
+            params="byte[],java.lang.String,int"
+            returns="byte[]"/>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.runtime.HttpBodyPolicyEngine"/>
+    <Method name="readBounded"
+            params="java.io.InputStream,int"
+            returns="byte[]"/>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+  </Match>
+
+  <!-- These returned objects are immutable views or required Servlet handles. -->
+  <Match>
+    <Class name="dev.o11y.agent.http.client.OutgoingHttpExchange"/>
+    <Method name="start"
+            params="java.lang.String,java.lang.String,java.util.Map"
+            returns="dev.o11y.agent.http.client.OutgoingHttpExchange"/>
+    <Field name="NOOP" type="dev.o11y.agent.http.client.OutgoingHttpExchange"/>
+    <Bug pattern="MS_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.spring.SpringRestClientBridge$SpringRequest"/>
+    <Method name="headers" params="" returns="java.util.Map"/>
+    <Field name="headers" type="java.util.Map"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.PolicyState$Snapshot"/>
+    <Method name="policies" params="" returns="java.util.Map"/>
+    <Field name="policies" type="java.util.Map"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.CapturingHttpServletRequest"/>
+    <Method name="getInputStream"
+            params=""
+            returns="jakarta.servlet.ServletInputStream"/>
+    <Field name="inputStream" type="jakarta.servlet.ServletInputStream"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.CapturingHttpServletResponse"/>
+    <Method name="getOutputStream"
+            params=""
+            returns="jakarta.servlet.ServletOutputStream"/>
+    <Field name="outputStream" type="jakarta.servlet.ServletOutputStream"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.CapturingHttpServletResponse"/>
+    <Method name="getWriter" params="" returns="java.io.PrintWriter"/>
+    <Field name="writer" type="java.io.PrintWriter"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.javax.CapturingHttpServletRequest"/>
+    <Method name="getInputStream"
+            params=""
+            returns="javax.servlet.ServletInputStream"/>
+    <Field name="inputStream" type="javax.servlet.ServletInputStream"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.javax.CapturingHttpServletResponse"/>
+    <Method name="getOutputStream"
+            params=""
+            returns="javax.servlet.ServletOutputStream"/>
+    <Field name="outputStream" type="javax.servlet.ServletOutputStream"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.javax.CapturingHttpServletResponse"/>
+    <Method name="getWriter" params="" returns="java.io.PrintWriter"/>
+    <Field name="writer" type="java.io.PrintWriter"/>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+
+  <!-- Jackson assigns these package-private DTO fields reflectively. -->
+  <Match>
+    <Class name="dev.o11y.agent.policy.DynamicPolicy$LogPolicy"/>
+    <Field name="enabled" type="boolean"/>
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.DynamicPolicy$Range"/>
+    <Field name="max" type="java.lang.Double"/>
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.PolicySet$EnvelopeEntry"/>
+    <Field name="policy" type="com.fasterxml.jackson.databind.JsonNode"/>
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.policy.PolicySet$EnvelopeEntry"/>
+    <Field name="version" type="int"/>
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+  </Match>
+
+  <!-- Nullable Boolean is an internal tri-state, never auto-unboxed. -->
+  <Match>
+    <Class name="dev.o11y.agent.method.MethodCaptureHelper"/>
+    <Method name="booleanValue"
+            params="java.lang.Object"
+            returns="java.lang.Boolean"/>
+    <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+  </Match>
+
+  <!-- Byte Buddy rewrites these exact Advice arguments after compilation. -->
+  <Match>
+    <Class name="dev.o11y.agent.http.client.okhttp.OkHttpRequestBodyTypeInstrumentation$WriteAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.http.client.okhttp.OkHttpClientBridge$RequestWriteState"/>
+    <Local name="sink"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.spring.SpringRestClientTypeInstrumentation$ConstructorAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Class"
+            returns="void"/>
+    <Local name="interceptors"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.DynamicServletTypeInstrumentation$ServletAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.servlet.ServletExchangeHelper$State"/>
+    <Local name="request"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.DynamicServletTypeInstrumentation$ServletAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.servlet.ServletExchangeHelper$State"/>
+    <Local name="response"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.javax.JavaxServletTypeInstrumentation$ServletAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.servlet.javax.JavaxServletExchangeHelper$State"/>
+    <Local name="request"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.servlet.javax.JavaxServletTypeInstrumentation$ServletAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.servlet.javax.JavaxServletExchangeHelper$State"/>
+    <Local name="response"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.jdk.JdkHttpClientTypeInstrumentation$ClientAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.http.client.jdk.JdkHttpClientBridge$State"/>
+    <Local name="request"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.server.quarkus.QuarkusRestTypeInstrumentation$InputStreamAdvice"/>
+    <Method name="exit"
+            params="java.lang.Object,java.lang.Object"
+            returns="void"/>
+    <Local name="input"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.server.quarkus.QuarkusRestTypeInstrumentation$ReadListenerAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="void"/>
+    <Local name="callback"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.server.quarkus.QuarkusRestTypeInstrumentation$OutputStreamAdvice"/>
+    <Method name="exit"
+            params="java.lang.Object,java.lang.Object"
+            returns="void"/>
+    <Local name="output"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.jdk.JdkHttpClientTypeInstrumentation$ClientAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.http.client.jdk.JdkHttpClientBridge$State"/>
+    <Local name="responseHandler"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+  <Match>
+    <Class name="dev.o11y.agent.http.client.apache5.Apache5AsyncTypeInstrumentation$AsyncAdvice"/>
+    <Method name="enter"
+            params="java.lang.Object,java.lang.Object"
+            returns="dev.o11y.agent.http.client.apache5.Apache5SimpleAsyncBridge$State"/>
+    <Local name="callback"/>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+</FindBugsFilter>

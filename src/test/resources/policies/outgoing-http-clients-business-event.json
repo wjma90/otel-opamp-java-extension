@@ -1,0 +1,266 @@
+{
+  "schemaVersion": "1.4",
+  "requestHeaders": [],
+  "responseHeaders": [],
+  "deniedHeaders": [],
+  "deniedBodyPaths": [],
+  "metricPolicies": [],
+  "methodPolicies": [],
+  "bodyEventPolicies": [
+    {
+      "id": "outgoing-http-clients-smoke-v1",
+      "enabled": true,
+      "ruleName": "Outgoing HTTP clients smoke",
+      "direction": "OUTGOING",
+      "requestContentType": "application/json",
+      "responseContentType": "application/json",
+      "conditions": [
+        {
+          "source": "REQUEST_PATH",
+          "path": "",
+          "operator": "EQUALS",
+          "values": [
+            "/api/outgoing"
+          ]
+        },
+        {
+          "source": "REQUEST_METHOD",
+          "path": "",
+          "operator": "EQUALS",
+          "values": [
+            "POST"
+          ]
+        },
+        {
+          "source": "REQUEST_HEADER",
+          "path": "x-o11y-smoke-client",
+          "operator": "IN",
+          "values": [
+            "spring",
+            "apache",
+            "okhttp-sync",
+            "okhttp-async",
+            "webclient",
+            "jdk-sync",
+            "jdk-async",
+            "apache5",
+            "apache5-async"
+          ]
+        },
+        {
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "operator": "EQUALS",
+          "values": [
+            "JULY"
+          ]
+        },
+        {
+          "source": "REQUEST_BODY",
+          "path": "operation",
+          "operator": "EQUALS",
+          "values": [
+            "OUTGOING_SMOKE"
+          ]
+        },
+        {
+          "source": "RESPONSE_STATUS",
+          "path": "",
+          "operator": "EQUALS",
+          "values": [
+            "201"
+          ]
+        },
+        {
+          "source": "RESPONSE_HEADER",
+          "path": "x-o11y-smoke-result",
+          "operator": "IN",
+          "values": [
+            "approved-spring",
+            "approved-apache",
+            "approved-okhttp-sync",
+            "approved-okhttp-async",
+            "approved-webclient",
+            "approved-jdk-sync",
+            "approved-jdk-async",
+            "approved-apache5",
+            "approved-apache5-async"
+          ]
+        },
+        {
+          "source": "RESPONSE_BODY",
+          "path": "status",
+          "operator": "EQUALS",
+          "values": [
+            "APPROVED"
+          ]
+        }
+      ],
+      "eventName": "outgoing-http-client-approved",
+      "staticAttributes": [
+        {
+          "attribute": "event.type",
+          "value": "outgoing-http-client-approved",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ]
+        }
+      ],
+      "maxBodyBytes": 8192,
+      "fields": [
+        {
+          "attribute": "test.outgoing.request.client",
+          "source": "REQUEST_HEADER",
+          "path": "x-o11y-smoke-client",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG",
+            "METRIC"
+          ],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": [
+              "spring",
+              "apache",
+              "okhttp-sync",
+              "okhttp-async",
+              "webclient",
+              "jdk-sync",
+              "jdk-async",
+              "apache5",
+              "apache5-async"
+            ],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "test.outgoing.response.result",
+          "source": "RESPONSE_HEADER",
+          "path": "x-o11y-smoke-result",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "test.outgoing.request.campaign",
+          "source": "REQUEST_QUERY",
+          "path": "campaign",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG",
+            "METRIC"
+          ],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": [
+              "JULY"
+            ],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "test.outgoing.library",
+          "source": "REQUEST_BODY",
+          "path": "library",
+          "type": "STRING",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ],
+          "valuePolicy": {
+            "type": "ENUM",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "test.outgoing.request.amount",
+          "source": "REQUEST_BODY",
+          "path": "amount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        },
+        {
+          "attribute": "test.outgoing.response.amount",
+          "source": "RESPONSE_BODY",
+          "path": "acceptedAmount",
+          "type": "DOUBLE",
+          "destinations": [
+            "SPAN",
+            "LOG"
+          ],
+          "valuePolicy": {
+            "type": "RANGE",
+            "allowed": [],
+            "fallback": "OTHER",
+            "ranges": []
+          }
+        }
+      ],
+      "derivedFields": [],
+      "log": {
+        "enabled": true,
+        "severity": "INFO",
+        "body": "Outgoing exchange approved"
+      }
+    }
+  ],
+  "eventMetricPolicies": [
+    {
+      "id": "outgoing-http-clients-count-v1",
+      "enabled": true,
+      "eventName": "outgoing-http-client-approved",
+      "name": "o11y.smoke.outgoing.operations",
+      "instrument": "COUNTER",
+      "unit": "{operation}",
+      "description": "Successful outgoing HTTP client operations",
+      "valueField": "",
+      "dimensions": [
+        "test.outgoing.request.client",
+        "test.outgoing.request.campaign"
+      ],
+      "buckets": []
+    },
+    {
+      "id": "outgoing-http-clients-amount-v1",
+      "enabled": true,
+      "eventName": "outgoing-http-client-approved",
+      "name": "o11y.smoke.outgoing.amount",
+      "instrument": "HISTOGRAM",
+      "unit": "{currency}",
+      "description": "Request amount sent by outgoing HTTP clients",
+      "valueField": "test.outgoing.request.amount",
+      "dimensions": [],
+      "buckets": [
+        100,
+        250,
+        500,
+        1000
+      ]
+    }
+  ]
+}
