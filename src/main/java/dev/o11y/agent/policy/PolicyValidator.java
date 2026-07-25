@@ -29,9 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 public final class PolicyValidator {
-  public static final String MAX_SUPPORTED_SCHEMA_VERSION = "1.6";
+  public static final String MAX_SUPPORTED_SCHEMA_VERSION = "1.7";
   private static final Set<String> SUPPORTED_SCHEMA_VERSIONS =
-      Set.of("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", MAX_SUPPORTED_SCHEMA_VERSION);
+      Set.of("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", MAX_SUPPORTED_SCHEMA_VERSION);
   static final int MAX_HTTP_METRIC_POLICIES = 64;
   static final int MAX_METHOD_POLICIES = 64;
   static final int MAX_METHOD_CAPTURES_PER_POLICY = 32;
@@ -136,37 +136,41 @@ public final class PolicyValidator {
     List<String> methodPackages = normalizeAllowedPackages(allowedPackages);
     String schemaVersion = policy.schemaVersion == null ? "" : policy.schemaVersion;
     if (!SUPPORTED_SCHEMA_VERSIONS.contains(schemaVersion)) {
-      errors.add("schemaVersion must be 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 or 1.6");
+      errors.add("schemaVersion must be 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 or 1.7");
     }
     if (!policy.metricPolicies.isEmpty()
-        && !Set.of("1.3", "1.4", "1.5", "1.6").contains(schemaVersion)) {
+        && !Set.of("1.3", "1.4", "1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add("dynamic HTTP metric value sources require schemaVersion 1.3 or newer");
     }
     if ((!policy.bodyEventPolicies.isEmpty() || !policy.eventMetricPolicies.isEmpty())
-        && !Set.of("1.3", "1.4", "1.5", "1.6").contains(schemaVersion)) {
+        && !Set.of("1.3", "1.4", "1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add("policy-driven HTTP events require schemaVersion 1.3 or newer");
     }
     if (policy.bodyEventPolicies.stream().anyMatch(event -> !event.derivedFields.isEmpty())
-        && !Set.of("1.2", "1.3", "1.4", "1.5", "1.6").contains(schemaVersion)) {
+        && !Set.of("1.2", "1.3", "1.4", "1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add("derived body fields require schemaVersion 1.2 or newer");
     }
     if (usesHttpMetadataSources(policy)
-        && !Set.of("1.4", "1.5", "1.6").contains(schemaVersion)) {
+        && !Set.of("1.4", "1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add(
           "REQUEST_HEADER, RESPONSE_HEADER and REQUEST_QUERY require schemaVersion 1.4");
     }
-    if (usesPathParameterSource(policy) && !Set.of("1.5", "1.6").contains(schemaVersion)) {
+    if (usesPathParameterSource(policy)
+        && !Set.of("1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add("REQUEST_PATH_PARAM requires schemaVersion 1.5");
     }
     if ((!policy.messagingEventPolicies.isEmpty()
             || !policy.messagingMetricPolicies.isEmpty())
-        && !Set.of("1.5", "1.6").contains(schemaVersion)) {
+        && !Set.of("1.5", "1.6", "1.7").contains(schemaVersion)) {
       errors.add("messaging policy events require schemaVersion 1.5");
     }
     if (policy.eventMetricPolicies.stream()
             .anyMatch(metric -> !metric.standardAttributes.isEmpty())
-        && !"1.6".equals(schemaVersion)) {
+        && !Set.of("1.6", "1.7").contains(schemaVersion)) {
       errors.add("HTTP event metric standard attributes require schemaVersion 1.6");
+    }
+    if (usesPassthroughValuePolicy(policy) && !"1.7".equals(schemaVersion)) {
+      errors.add("uncontrolled metric label cardinality requires schemaVersion 1.7");
     }
     validateHeaderList("requestHeaders", policy.requestHeaders, 16, true, errors);
     validateHeaderList("responseHeaders", policy.responseHeaders, 16, true, errors);
@@ -696,7 +700,7 @@ public final class PolicyValidator {
             || !field.destinations().contains("METRIC")) {
           errors.add(
               metric.name
-                  + ": dimension must reference a unique bounded extracted or derived field: "
+                  + ": dimension must reference a unique extracted or derived metric field: "
                   + dimension);
         } else {
           metricCardinality =
@@ -1278,7 +1282,15 @@ public final class PolicyValidator {
   private static void validateBoundedValuePolicy(
       ValuePolicy policy, String owner, List<String> errors) {
     if (policy == null) {
-      errors.add(owner + ": bounded value policy is required");
+      errors.add(owner + ": value policy is required");
+      return;
+    }
+    if ("PASSTHROUGH".equals(policy.type)) {
+      if (!policy.allowed.isEmpty()
+          || !policy.ranges.isEmpty()
+          || policy.fallback != null && !policy.fallback.isBlank()) {
+        errors.add(owner + ": PASSTHROUGH does not accept allowed values, ranges or fallback");
+      }
       return;
     }
     if (policy.fallback == null
@@ -1340,7 +1352,7 @@ public final class PolicyValidator {
       }
       return;
     }
-    errors.add(owner + ": metric labels require bounded ENUM, RANGE or BOOLEAN policy");
+    errors.add(owner + ": metric labels require ENUM, RANGE, BOOLEAN or PASSTHROUGH policy");
   }
 
   private static int valueCardinality(ValuePolicy policy) {
@@ -1351,8 +1363,37 @@ public final class PolicyValidator {
       case "ENUM" -> Math.min(MAX_METRIC_CARDINALITY + 1, policy.allowed.size() + 1);
       case "RANGE" -> Math.min(MAX_METRIC_CARDINALITY + 1, policy.ranges.size() + 1);
       case "BOOLEAN" -> 2;
+      case "PASSTHROUGH" -> 1;
       default -> MAX_METRIC_CARDINALITY + 1;
     };
+  }
+
+  private static boolean usesPassthroughValuePolicy(DynamicPolicy policy) {
+    if (policy.metricPolicies.stream()
+        .flatMap(metric -> metric.customAttributes.stream())
+        .anyMatch(attribute -> passthrough(attribute.valuePolicy))) {
+      return true;
+    }
+    if (policy.methodPolicies.stream()
+        .flatMap(method -> method.captures.stream())
+        .anyMatch(capture -> passthrough(capture.valuePolicy))) {
+      return true;
+    }
+    if (policy.bodyEventPolicies.stream()
+        .anyMatch(
+            event ->
+                event.fields.stream().anyMatch(field -> passthrough(field.valuePolicy))
+                    || event.derivedFields.stream()
+                        .anyMatch(field -> passthrough(field.valuePolicy)))) {
+      return true;
+    }
+    return policy.messagingEventPolicies.stream()
+        .flatMap(event -> event.fields.stream())
+        .anyMatch(field -> passthrough(field.valuePolicy));
+  }
+
+  private static boolean passthrough(ValuePolicy policy) {
+    return policy != null && "PASSTHROUGH".equals(policy.type);
   }
 
   private static long boundedCardinalityProduct(long current, int factor) {

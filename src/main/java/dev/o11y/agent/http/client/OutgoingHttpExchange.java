@@ -1,6 +1,7 @@
 package dev.o11y.agent.http.client;
 
 import dev.o11y.agent.http.runtime.HttpBodyPolicyEngine;
+import dev.o11y.agent.http.runtime.HttpErrorType;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -313,6 +314,71 @@ public final class OutgoingHttpExchange {
     }
     requestBody.clear();
     releaseOwnership();
+  }
+
+  /**
+   * Completes a transport failure so request-only event metrics can retain the canonical OTel
+   * {@code error.type}. Response-dependent rules remain fail-closed when no response exists.
+   */
+  public void fail(Throwable failure) {
+    fail(0, Map.of(), failure);
+  }
+
+  /** Completes a failure that happened after response metadata became available. */
+  public void fail(
+      int responseStatus,
+      Map<String, List<String>> responseHeaders,
+      Throwable failure) {
+    if (!owner || !finished.compareAndSet(false, true)) {
+      return;
+    }
+    try {
+      Context active = Context.current();
+      Context effectiveContext =
+          Span.fromContext(active).isRecording() ? active : context;
+      Map<String, List<String>> normalizedResponseHeaders =
+          normalizedHeaders(responseHeaders, captureHeaderNames(responseHeaderNames));
+      Map<String, List<String>> eventResponseHeaders =
+          normalizedHeaders(responseHeaders, Set.copyOf(eventResponseHeaderNames));
+      captureHeaders(
+          Span.fromContext(effectiveContext),
+          requestHeaderNames,
+          "http.request.header.",
+          requestHeaders);
+      captureHeaders(
+          Span.fromContext(effectiveContext),
+          responseHeaderNames,
+          "http.response.header.",
+          normalizedResponseHeaders);
+      if (eventCandidate) {
+        byte[] requestBytes = requestBody.bytes();
+        try {
+          HttpBodyPolicyEngine.processWithErrorType(
+              "OUTGOING",
+              method,
+              path,
+              first(requestHeaders, "content-type"),
+              first(requestHeaders, "content-encoding"),
+              requestBytes,
+              responseStatus,
+              first(normalizedResponseHeaders, "content-type"),
+              first(normalizedResponseHeaders, "content-encoding"),
+              new byte[0],
+              eventRequestHeaders,
+              eventResponseHeaders,
+              requestQuery,
+              Map.of(),
+              effectiveContext,
+              generation,
+              HttpErrorType.resolve("OUTGOING", responseStatus, failure));
+        } finally {
+          Arrays.fill(requestBytes, (byte) 0);
+        }
+      }
+    } finally {
+      requestBody.clear();
+      releaseOwnership();
+    }
   }
 
   private void releaseOwnership() {

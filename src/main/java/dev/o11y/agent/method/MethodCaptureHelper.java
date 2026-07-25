@@ -431,6 +431,9 @@ public final class MethodCaptureHelper {
   }
 
   private static Object transform(String raw, ValuePolicy policy) {
+    if ("PASSTHROUGH".equals(policy.type)) {
+      return raw == null || raw.isBlank() ? null : raw;
+    }
     if (raw == null || raw.isBlank()) {
       if ("BOOLEAN".equals(policy.type)) {
         return Boolean.parseBoolean(policy.fallback);

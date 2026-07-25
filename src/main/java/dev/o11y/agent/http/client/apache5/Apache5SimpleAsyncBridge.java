@@ -201,7 +201,7 @@ public final class Apache5SimpleAsyncBridge {
 
     private void abort(Throwable failure) {
       if (finished.compareAndSet(false, true)) {
-        exchange.abort();
+        exchange.fail(failure);
         end(null, failure);
       }
     }

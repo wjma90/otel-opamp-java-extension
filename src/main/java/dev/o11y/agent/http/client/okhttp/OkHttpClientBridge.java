@@ -789,7 +789,7 @@ public final class OkHttpClientBridge {
       try {
         response = proceed(chain, request);
       } catch (Throwable original) {
-        exchange.abort();
+        exchange.fail(original);
         throw original;
       } finally {
         pop(call);

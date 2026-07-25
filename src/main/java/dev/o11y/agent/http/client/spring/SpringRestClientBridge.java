@@ -217,7 +217,7 @@ public final class SpringRestClientBridge {
             telemetryResponse = captured.telemetryResponse();
             return captured.response();
           } catch (Throwable original) {
-            exchange.abort();
+            exchange.fail(original);
             throw original;
           }
         } finally {
@@ -277,12 +277,12 @@ public final class SpringRestClientBridge {
       } catch (IOException failure) {
         close(input, failure);
         handler.setReplay(new FaultingInputStream(recording.captured(), failure));
-        exchange.abort();
+        exchange.fail(status, headers, failure);
         return new CaptureResult(replayingResponse, telemetryResponse);
       } catch (Throwable failure) {
         close(input, failure);
         handler.setReplay(new FaultingInputStream(recording.captured(), failure));
-        exchange.abort();
+        exchange.fail(status, headers, failure);
         return new CaptureResult(replayingResponse, telemetryResponse);
       }
     }

@@ -1,6 +1,7 @@
 package dev.o11y.agent.servlet;
 
 import dev.o11y.agent.http.runtime.HttpBodyPolicyEngine;
+import dev.o11y.agent.http.runtime.HttpErrorType;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -208,7 +209,7 @@ public final class ServletExchangeHelper {
             // Async completed during registration; process the bytes already observed.
           }
         }
-        complete(outcome);
+        complete(outcome, failure);
       } catch (RuntimeException error) {
         DIAGNOSTIC_LOGGER.log(Level.FINE, "o11y_servlet_capture=completion_skipped");
       } finally {
@@ -217,10 +218,14 @@ public final class ServletExchangeHelper {
     }
 
     void complete() {
-      complete(CompletionOutcome.COMPLETED);
+      complete(CompletionOutcome.COMPLETED, null);
     }
 
     void complete(CompletionOutcome outcome) {
+      complete(outcome, null);
+    }
+
+    void complete(CompletionOutcome outcome, Throwable failure) {
       if (completed == null || !completed.compareAndSet(false, true)) {
         return;
       }
@@ -233,14 +238,19 @@ public final class ServletExchangeHelper {
         }
         requestBody = request == null ? new byte[0] : request.capturedBody();
         responseBody = response == null ? new byte[0] : response.capturedBody();
-        HttpBodyPolicyEngine.process(
+        int responseStatus = outcome.responseStatus(originalResponse.getStatus());
+        String errorType =
+            outcome == CompletionOutcome.TIMED_OUT
+                ? "timeout"
+                : HttpErrorType.resolve("INCOMING", responseStatus, failure);
+        HttpBodyPolicyEngine.processWithErrorType(
             "INCOMING",
             method,
             path,
             requestContentType,
             requestContentEncoding,
             requestBody,
-            outcome.responseStatus(originalResponse.getStatus()),
+            responseStatus,
             originalResponse.getContentType(),
             originalResponse.getHeader("Content-Encoding"),
             responseBody,
@@ -249,7 +259,8 @@ public final class ServletExchangeHelper {
             eventRequestQuery,
             selectedRequestPathParameters(originalRequest, method, path, generation),
             context,
-            generation);
+            generation,
+            errorType);
       } finally {
         wipe(requestBody);
         wipe(responseBody);

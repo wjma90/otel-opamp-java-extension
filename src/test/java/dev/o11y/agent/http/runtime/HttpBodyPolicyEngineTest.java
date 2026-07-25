@@ -395,6 +395,27 @@ class HttpBodyPolicyEngineTest {
             snapshot.generation()),
         "the attempt event remains valid while the HTTP 200 success event is rejected");
     assertEquals(
+        1,
+        HttpBodyPolicyEngine.processWithErrorType(
+            "INCOMING",
+            "POST",
+            "/api/exchanges",
+            "application/json",
+            "identity",
+            request,
+            0,
+            "",
+            "",
+            new byte[0],
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Context.root(),
+            snapshot.generation(),
+            "java.net.UnknownHostException"),
+        "a request-only event may describe a transport failure, while a status condition cannot match an absent response");
+    assertEquals(
         2,
         HttpBodyPolicyEngine.process(
             "INCOMING",

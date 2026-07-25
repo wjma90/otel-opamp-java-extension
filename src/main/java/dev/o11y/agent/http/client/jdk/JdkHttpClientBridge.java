@@ -185,7 +185,11 @@ public final class JdkHttpClientBridge {
       if (!finished.compareAndSet(false, true)) {
         return;
       }
-      exchange.abort();
+      JdkResponse response = telemetryResponse;
+      exchange.fail(
+          response == null ? 0 : response.status(),
+          response == null ? Map.of() : response.headers(),
+          failure);
       end(failure);
     }
 

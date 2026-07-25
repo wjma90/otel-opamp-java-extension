@@ -68,7 +68,11 @@ public final class ApacheHttpClientBridge {
       state.exchange.abort();
       return;
     }
-    if (error != null || response == null) {
+    if (error != null) {
+      state.exchange.fail(error);
+      return;
+    }
+    if (response == null) {
       state.exchange.abort();
       return;
     }

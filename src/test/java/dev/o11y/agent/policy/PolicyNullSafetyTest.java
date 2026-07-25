@@ -42,7 +42,7 @@ class PolicyNullSafetyTest {
 
     List<String> errors = PolicyValidator.validate(policy, METHOD_PACKAGES);
 
-    assertContains(errors, "bounded value policy is required");
+    assertContains(errors, "value policy is required");
     assertContains(errors, "value is required");
     assertContains(errors, "log must be an object");
   }

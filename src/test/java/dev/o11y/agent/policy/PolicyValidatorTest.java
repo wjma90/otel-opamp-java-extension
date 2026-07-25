@@ -16,7 +16,31 @@ class PolicyValidatorTest {
 
   @Test
   void reportsTheNewestSchemaAcceptedByTheValidator() {
-    assertEquals("1.6", PolicyValidator.MAX_SUPPORTED_SCHEMA_VERSION);
+    assertEquals("1.7", PolicyValidator.MAX_SUPPORTED_SCHEMA_VERSION);
+  }
+
+  @Test
+  void permitsExplicitlyUncontrolledMetricLabelsOnlyWithSchema17() throws Exception {
+    DynamicPolicy policy = DynamicPolicy.parse(validPolicy("test.uncontrolled.labels", "COUNTER"));
+    DynamicPolicy.ValuePolicy valuePolicy =
+        policy.metricPolicies.getFirst().customAttributes.getFirst().valuePolicy;
+    valuePolicy.type = "PASSTHROUGH";
+    valuePolicy.allowed = List.of();
+    valuePolicy.ranges = List.of();
+    valuePolicy.fallback = "";
+
+    policy.schemaVersion = "1.6";
+    assertTrue(
+        PolicyValidator.validate(policy, METHOD_PACKAGES).stream()
+            .anyMatch(error -> error.contains("requires schemaVersion 1.7")));
+
+    policy.schemaVersion = "1.7";
+    assertTrue(PolicyValidator.validate(policy, METHOD_PACKAGES).isEmpty());
+
+    valuePolicy.fallback = "OTHER";
+    assertTrue(
+        PolicyValidator.validate(policy, METHOD_PACKAGES).stream()
+            .anyMatch(error -> error.contains("PASSTHROUGH does not accept")));
   }
 
   @Test

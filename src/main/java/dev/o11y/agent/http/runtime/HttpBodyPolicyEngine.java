@@ -343,6 +343,46 @@ public final class HttpBodyPolicyEngine {
         requestPathParameters,
         context,
         generation,
+        null,
+        null);
+  }
+
+  public static int processWithErrorType(
+      String direction,
+      String method,
+      String path,
+      String requestContentType,
+      String requestContentEncoding,
+      byte[] requestBody,
+      int responseStatus,
+      String responseContentType,
+      String responseContentEncoding,
+      byte[] responseBody,
+      Map<String, List<String>> requestHeaders,
+      Map<String, List<String>> responseHeaders,
+      Map<String, List<String>> requestQuery,
+      Map<String, List<String>> requestPathParameters,
+      Context context,
+      String generation,
+      String errorType) {
+    return process(
+        direction,
+        method,
+        path,
+        requestContentType,
+        requestContentEncoding,
+        requestBody,
+        responseStatus,
+        responseContentType,
+        responseContentEncoding,
+        responseBody,
+        requestHeaders,
+        responseHeaders,
+        requestQuery,
+        requestPathParameters,
+        context,
+        generation,
+        errorType,
         null);
   }
 
@@ -372,6 +412,46 @@ public final class HttpBodyPolicyEngine {
       Context context,
       String generation,
       Map<String, Object> spanAttributes) {
+    return processCollectingSpanAttributes(
+        direction,
+        method,
+        path,
+        requestContentType,
+        requestContentEncoding,
+        requestBody,
+        responseStatus,
+        responseContentType,
+        responseContentEncoding,
+        responseBody,
+        requestHeaders,
+        responseHeaders,
+        requestQuery,
+        requestPathParameters,
+        context,
+        generation,
+        null,
+        spanAttributes);
+  }
+
+  public static int processCollectingSpanAttributes(
+      String direction,
+      String method,
+      String path,
+      String requestContentType,
+      String requestContentEncoding,
+      byte[] requestBody,
+      int responseStatus,
+      String responseContentType,
+      String responseContentEncoding,
+      byte[] responseBody,
+      Map<String, List<String>> requestHeaders,
+      Map<String, List<String>> responseHeaders,
+      Map<String, List<String>> requestQuery,
+      Map<String, List<String>> requestPathParameters,
+      Context context,
+      String generation,
+      String errorType,
+      Map<String, Object> spanAttributes) {
     if (spanAttributes == null) {
       throw new IllegalArgumentException("spanAttributes is required");
     }
@@ -392,6 +472,7 @@ public final class HttpBodyPolicyEngine {
         requestPathParameters,
         context,
         generation,
+        errorType,
         spanAttributes);
   }
 
@@ -412,6 +493,7 @@ public final class HttpBodyPolicyEngine {
       Map<String, List<String>> requestPathParameters,
       Context context,
       String generation,
+      String errorType,
       Map<String, Object> spanAttributes) {
     RuntimePolicy policy = current(generation);
     Map<String, List<String>> safeRequestHeaders = boundedMap(requestHeaders, true);
@@ -474,7 +556,15 @@ public final class HttpBodyPolicyEngine {
       if (rule.logEnabled) {
         emitLog(context, rule, fields);
       }
-      emitMetrics(context, policy.metrics, rule, fields, method, path, responseStatus);
+      emitMetrics(
+          context,
+          policy.metrics,
+          rule,
+          fields,
+          method,
+          path,
+          responseStatus,
+          errorType);
       emitted++;
     }
     return emitted;
@@ -524,7 +614,8 @@ public final class HttpBodyPolicyEngine {
           switch (condition.source) {
             case "REQUEST_METHOD" -> method;
             case "REQUEST_PATH" -> path;
-            case "RESPONSE_STATUS" -> String.valueOf(responseStatus);
+            case "RESPONSE_STATUS" ->
+                responseStatus > 0 ? String.valueOf(responseStatus) : null;
             default -> null;
           };
       if (actual == null) {
@@ -780,7 +871,8 @@ public final class HttpBodyPolicyEngine {
           switch (condition.source) {
             case "REQUEST_METHOD" -> method;
             case "REQUEST_PATH" -> path;
-            case "RESPONSE_STATUS" -> String.valueOf(responseStatus);
+            case "RESPONSE_STATUS" ->
+                responseStatus > 0 ? String.valueOf(responseStatus) : null;
             case "REQUEST_BODY" -> read(requestRoot, normalizePath(condition.path));
             case "RESPONSE_BODY" -> read(responseRoot, normalizePath(condition.path));
             case "REQUEST_HEADER" -> requestHeaders.get(condition.path);
@@ -1018,7 +1110,8 @@ public final class HttpBodyPolicyEngine {
       Map<String, ExtractedField> fields,
       String method,
       String path,
-      int responseStatus) {
+      int responseStatus,
+      String errorType) {
     for (EventMetric metric : metrics) {
       if (!metric.eventName.equals(rule.eventName)) {
         continue;
@@ -1045,7 +1138,8 @@ public final class HttpBodyPolicyEngine {
         putStandardHttpAttribute(
             dimensions,
             name,
-            standardHttpAttribute(name, rule, method, path, responseStatus));
+            standardHttpAttribute(
+                name, rule, method, path, responseStatus, errorType));
       }
       if (!complete) {
         continue;
@@ -1060,16 +1154,21 @@ public final class HttpBodyPolicyEngine {
   }
 
   private static Object standardHttpAttribute(
-      String name, EventRule rule, String method, String path, int responseStatus) {
+      String name,
+      EventRule rule,
+      String method,
+      String path,
+      int responseStatus,
+      String errorType) {
     return switch (name) {
       case "http.request.method" -> method;
-      case "http.response.status_code" -> (long) responseStatus;
+      case "http.response.status_code" ->
+          responseStatus > 0 ? (long) responseStatus : null;
       case "http.route" -> "INCOMING".equals(rule.direction) ? matchedRoute(rule, path) : null;
       case "error.type" ->
-          ("INCOMING".equals(rule.direction) && responseStatus >= 500)
-                  || ("OUTGOING".equals(rule.direction) && responseStatus >= 400)
-              ? String.valueOf(responseStatus)
-              : null;
+          errorType == null || errorType.isBlank()
+              ? HttpErrorType.resolve(rule.direction, responseStatus, null)
+              : errorType;
       default -> null;
     };
   }
@@ -1165,6 +1264,9 @@ public final class HttpBodyPolicyEngine {
   }
 
   private static Object transform(String raw, ValuePolicy policy) {
+    if ("PASSTHROUGH".equals(policy.type)) {
+      return raw == null || raw.isBlank() ? null : raw;
+    }
     if (raw == null || raw.isBlank()) {
       return "BOOLEAN".equals(policy.type) ? Boolean.parseBoolean(policy.fallback) : policy.fallback;
     }

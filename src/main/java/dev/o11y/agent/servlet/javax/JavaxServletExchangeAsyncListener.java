@@ -14,17 +14,18 @@ final class JavaxServletExchangeAsyncListener implements AsyncListener {
 
   @Override
   public void onComplete(AsyncEvent event) {
-    completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome.COMPLETED);
+    completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome.COMPLETED, null);
   }
 
   @Override
   public void onTimeout(AsyncEvent event) {
-    completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome.TIMED_OUT);
+    completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome.TIMED_OUT, null);
   }
 
   @Override
   public void onError(AsyncEvent event) {
-    completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome.FAILED);
+    completeSafely(
+        JavaxServletExchangeHelper.State.CompletionOutcome.FAILED, event.getThrowable());
   }
 
   @Override
@@ -32,9 +33,10 @@ final class JavaxServletExchangeAsyncListener implements AsyncListener {
     event.getAsyncContext().addListener(this);
   }
 
-  private void completeSafely(JavaxServletExchangeHelper.State.CompletionOutcome outcome) {
+  private void completeSafely(
+      JavaxServletExchangeHelper.State.CompletionOutcome outcome, Throwable failure) {
     try {
-      state.complete(outcome);
+      state.complete(outcome, failure);
     } catch (RuntimeException ignored) {
       // Telemetry must never change the Servlet application's outcome.
     }

@@ -21,6 +21,7 @@ public final class HttpClientInstrumentationHelpers {
         "dev.o11y.agent.http.runtime.BodyNumericExpression$Node",
         "dev.o11y.agent.http.runtime.BodyNumericExpression$Parser",
         "dev.o11y.agent.http.runtime.BoundedJsonParser",
+        "dev.o11y.agent.http.runtime.HttpErrorType",
         "dev.o11y.agent.http.runtime.HttpBodyPolicyEngine",
         "dev.o11y.agent.http.runtime.HttpBodyPolicyEngine$PolicyCache",
         "dev.o11y.agent.http.runtime.HttpBodyPolicyEngine$CapturePlan",

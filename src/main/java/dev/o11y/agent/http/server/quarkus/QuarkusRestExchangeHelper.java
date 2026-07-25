@@ -2,6 +2,7 @@ package dev.o11y.agent.http.server.quarkus;
 
 import dev.o11y.agent.http.HttpServerCompletionBridge;
 import dev.o11y.agent.http.runtime.HttpBodyPolicyEngine;
+import dev.o11y.agent.http.runtime.HttpErrorType;
 import dev.o11y.agent.servlet.BoundedBodyCapture;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -228,6 +229,7 @@ public final class QuarkusRestExchangeHelper {
               "INCOMING", state.method, state.path, Map.of(), state.generation),
           effectiveContext,
           state.generation,
+          HttpErrorType.resolve("INCOMING", responseStatus, effectiveFailure),
           eventSpanAttributes);
       spanAttributes.putAll(eventSpanAttributes);
       return Map.copyOf(spanAttributes);

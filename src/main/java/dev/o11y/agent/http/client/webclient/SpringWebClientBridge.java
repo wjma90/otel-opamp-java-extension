@@ -126,7 +126,7 @@ public final class SpringWebClientBridge {
         return response
             .map(state::response)
             .doOnError(state::abort)
-            .doOnCancel(() -> state.abort(new IllegalStateException("WebClient exchange cancelled")));
+            .doOnCancel(state::cancel);
       } catch (Throwable failure) {
         if (exchange != null) {
           exchange.abort();
@@ -245,11 +245,7 @@ public final class SpringWebClientBridge {
                   body.doOnNext(responseBody::capture)
                       .doOnComplete(this::complete)
                       .doOnError(this::abort)
-                      .doOnCancel(
-                          () ->
-                              abort(
-                                  new IllegalStateException(
-                                      "WebClient response body cancelled"))))
+                      .doOnCancel(this::cancel))
           .build();
     }
 
@@ -280,8 +276,24 @@ public final class SpringWebClientBridge {
       if (body != null) {
         body.clear();
       }
-      exchange.abort();
+      WebClientResponse response = telemetryResponse;
+      exchange.fail(
+          response == null ? 0 : response.status(),
+          response == null ? Map.of() : response.headers(),
+          failure);
       end(failure);
+    }
+
+    private void cancel() {
+      if (!finished.compareAndSet(false, true)) {
+        return;
+      }
+      BoundedResponse body = responseBody;
+      if (body != null) {
+        body.clear();
+      }
+      exchange.abort();
+      end(null);
     }
 
     private void end(Throwable failure) {

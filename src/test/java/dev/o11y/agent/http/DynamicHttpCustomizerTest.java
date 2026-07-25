@@ -29,12 +29,19 @@ class DynamicHttpCustomizerTest {
     bool.type = "BOOLEAN";
     bool.fallback = "false";
 
+    DynamicPolicy.ValuePolicy passthrough = new DynamicPolicy.ValuePolicy();
+    passthrough.type = "PASSTHROUGH";
+    passthrough.allowed = List.of();
+    passthrough.fallback = "";
+
     assertEquals("WEB", DynamicHttpCustomizer.transform("web", enumeration));
     assertEquals("OTHER", DynamicHttpCustomizer.transform("MOBILE", enumeration));
     assertEquals("1000-3000", DynamicHttpCustomizer.transform("2500", ranges));
     assertEquals("OTHER", DynamicHttpCustomizer.transform("not-a-number", ranges));
     assertEquals(false, DynamicHttpCustomizer.transform(null, bool));
     assertEquals(true, DynamicHttpCustomizer.transform("true", bool));
+    assertEquals("any-customer-value", DynamicHttpCustomizer.transform("any-customer-value", passthrough));
+    assertEquals(null, DynamicHttpCustomizer.transform(null, passthrough));
   }
 
   @Test
