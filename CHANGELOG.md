@@ -7,6 +7,8 @@ independiente.
 
 ## [Unreleased]
 
+## [2.28.1-o11y.9] - 2026-07-30
+
 ### Changed
 
 - El contexto TLS con CA OpAMP adicional exige TLS 1.3; conserva validación de
