@@ -21,6 +21,8 @@ independiente.
 
 ### Fixed
 
+- El ensamblado del JAR combinado conserva el UID/GID del runner de Actions,
+  permitiendo fijar permisos de sólo lectura antes de publicar el asset.
 - Los fixtures y smoke tests declaran su consumo JSON, ejecutan Java sin shell
   ni comando configurable y reservan puertos sólo sobre loopback, resolviendo
   los cuatro hallazgos bloqueantes del gate Semgrep.

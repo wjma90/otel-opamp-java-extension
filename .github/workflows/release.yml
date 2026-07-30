@@ -208,18 +208,23 @@ jobs:
             "target/java-agent-extension-${EXTENSION_VERSION}.jar" \
             "${embedded_dir}/o11y-java-agent-extension.jar"
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace \
+            --entrypoint jar \
             "${MAVEN_IMAGE}" \
-            jar --update \
+            --update \
               --file "release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar" \
               -C release/embedded extensions
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --volume "${GITHUB_WORKSPACE}:/workspace:ro" \
             --workdir /workspace \
+            --entrypoint sh \
             "${MAVEN_IMAGE}" \
-            sh -eu -c \
+            -eu -c \
               "jar --list --file 'release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar' | grep -Fxq 'extensions/o11y-java-agent-extension.jar'"
+          test "$(stat -c '%u:%g' "${release_jar}")" = "$(id -u):$(id -g)"
           chmod 0444 "${release_jar}"
           rm -rf "${GITHUB_WORKSPACE}/release/embedded"
 
