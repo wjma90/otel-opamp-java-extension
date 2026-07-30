@@ -17,6 +17,7 @@ permissions:
   contents: read
 
 env:
+  MAVEN_IMAGE: maven:3.9.12-eclipse-temurin-21-alpine@sha256:8b2f036477a5bc9fbeb16cfb7301c484d7fff727b1c4907301ac665526bd7a8e
   SEMGREP_IMAGE: semgrep/semgrep:1.169.0@sha256:2b33f46ba66cf8cc2ad59ccfa7d22951fd00c632c38f1339e84ec8e6e641a942
   SEMGREP_RULES_COMMIT: 647d58eb2e085440618782963ff094178d98d2fe
   SEMGREP_RULES_SHA256: 4e655be3027b6ce5c5d44813580b7649d66be3dcdf44e7375102a139650f99f6
@@ -35,12 +36,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Cache Maven repository
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
 
       - name: Resolve and validate release metadata
         id: metadata
@@ -98,7 +100,12 @@ jobs:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
           OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
         run: |
-          ./mvnw -B -ntp \
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --volume "${HOME}/.m2:/root/.m2" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            mvn -B -ntp \
             -Drevision="${EXTENSION_VERSION}" \
             -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
             -Dspotbugs.skip=true \
@@ -113,7 +120,12 @@ jobs:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
           OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
         run: |
-          ./mvnw -B -ntp \
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --volume "${HOME}/.m2:/root/.m2" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            mvn -B -ntp \
             -Drevision="${EXTENSION_VERSION}" \
             -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
             clean verify
@@ -136,7 +148,12 @@ jobs:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
           OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
         run: |
-          ./mvnw -B -ntp \
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --volume "${HOME}/.m2:/root/.m2" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            mvn -B -ntp \
             -Pquarkus-smoke \
             -Drevision="${EXTENSION_VERSION}" \
             -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
@@ -151,7 +168,12 @@ jobs:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
           OTEL_AGENT_VERSION: ${{ steps.metadata.outputs.otel_agent_version }}
         run: |
-          ./mvnw -B -ntp \
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --volume "${HOME}/.m2:/root/.m2" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            mvn -B -ntp \
             -Pquarkus-smoke \
             -Drevision="${EXTENSION_VERSION}" \
             -Dopentelemetry.javaagent.version="${OTEL_AGENT_VERSION}" \
