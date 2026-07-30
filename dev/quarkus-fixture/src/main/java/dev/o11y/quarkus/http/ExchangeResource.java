@@ -48,6 +48,7 @@ public final class ExchangeResource {
 
   @POST
   @Path("__stop")
+  @Consumes(MediaType.APPLICATION_JSON)
   public Response stop() {
     Quarkus.asyncExit(0);
     return Response.accepted().build();

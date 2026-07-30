@@ -7,16 +7,17 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import dev.o11y.agent.http.runtime.HttpBodyPolicyEngine;
 import dev.o11y.agent.policy.PolicyState;
 import java.io.BufferedReader;
-import java.net.ServerSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -139,8 +140,8 @@ class QuarkusMessagingAgentSmokeIT {
       throws Exception {
     String policy = resource("quarkus-messaging-event.json");
     String compiled = PolicyState.applyJson(policy).compiledBodyPolicy();
-    List<String> command = new ArrayList<>();
-    command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+    ProcessBuilder builder = new ProcessBuilder("java");
+    List<String> command = builder.command();
     command.add("-javaagent:" + agent);
     command.add("-Dotel.javaagent.extensions=" + extension);
     command.add("-Dotel.service.name=o11y-quarkus-messaging-smoke");
@@ -162,7 +163,7 @@ class QuarkusMessagingAgentSmokeIT {
     command.add("-jar");
     command.add(runner.toString());
 
-    ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+    builder.redirectErrorStream(true);
     builder.environment().put("OPAMP_ENDPOINT", "http://127.0.0.1:1/v1/opamp");
     Process process = builder.start();
     Thread outputReader =
@@ -322,8 +323,9 @@ class QuarkusMessagingAgentSmokeIT {
   }
 
   private static int availablePort() throws Exception {
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
+    try (ServerSocketChannel channel = ServerSocketChannel.open()) {
+      channel.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+      return ((InetSocketAddress) channel.getLocalAddress()).getPort();
     }
   }
 

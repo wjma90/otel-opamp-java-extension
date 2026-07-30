@@ -7,6 +7,19 @@ independiente.
 
 ## [Unreleased]
 
+### Changed
+
+- El contexto TLS con CA OpAMP adicional exige TLS 1.3; conserva validación de
+  hostname y evita negociar protocolos obsoletos.
+- Los builds Quarkus anidados usan el Maven disponible en la imagen de CI y ya
+  no dependen de un Maven Wrapper ausente.
+
+### Fixed
+
+- Los fixtures y smoke tests declaran su consumo JSON, ejecutan Java sin shell
+  ni comando configurable y reservan puertos sólo sobre loopback, resolviendo
+  los cuatro hallazgos bloqueantes del gate Semgrep.
+
 ## [2.28.1-o11y.6] - 2026-07-24
 
 ### Added

@@ -105,7 +105,8 @@ un mensaje acotado y no reemplaza la generación previa.
 `OPAMP_TLS_CA_FILE` amplía la confianza normal de la JVM únicamente para el
 cliente OpAMP. No desactiva la verificación del hostname, no modifica el
 truststore global y no configura los exportadores OTLP. Monte el archivo como
-Secret y use un hostname presente en el SAN del certificado servidor.
+Secret y use un hostname presente en el SAN del certificado servidor. La
+conexión con CA adicional exige TLS 1.3.
 
 ## Gobierno de capturas
 

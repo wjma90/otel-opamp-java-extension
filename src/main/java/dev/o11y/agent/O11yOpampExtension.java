@@ -51,6 +51,7 @@ import opamp.proto.RemoteConfigStatuses;
 import opamp.proto.ServerErrorResponse;
 
 public final class O11yOpampExtension implements AutoConfigurationCustomizerProvider {
+  private static final String OPAMP_TLS_PROTOCOL = "TLSv1.3";
   private static final Logger LOGGER = Logger.getLogger(O11yOpampExtension.class.getName());
   private static final int MAX_REMOTE_CONFIG_BYTES = 1024 * 1024;
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
@@ -352,7 +353,7 @@ public final class O11yOpampExtension implements AutoConfigurationCustomizerProv
     }
     X509TrustManager trustManager = opampTrustManager(Path.of(configuredCA));
     try {
-      SSLContext sslContext = SSLContext.getInstance("TLS");
+      SSLContext sslContext = SSLContext.getInstance(OPAMP_TLS_PROTOCOL);
       sslContext.init(null, new TrustManager[] {trustManager}, null);
       return builder.sslSocketFactory(sslContext.getSocketFactory(), trustManager);
     } catch (GeneralSecurityException error) {

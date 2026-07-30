@@ -480,7 +480,7 @@
                   <goal>exec</goal>
                 </goals>
                 <configuration>
-                  <executable>${project.basedir}/mvnw</executable>
+                  <executable>mvn</executable>
                   <workingDirectory>${project.basedir}</workingDirectory>
                   <arguments>
                     <argument>-B</argument>
@@ -517,7 +517,7 @@
                       <fileset dir="${project.basedir}/dev/quarkus-fixture/target/quarkus-app"/>
                     </copy>
                     <exec
-                        executable="${project.basedir}/mvnw"
+                        executable="mvn"
                         dir="${project.basedir}"
                         failonerror="true">
                       <arg value="-B"/>
