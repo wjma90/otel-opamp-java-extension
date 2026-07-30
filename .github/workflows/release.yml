@@ -225,6 +225,17 @@ jobs:
             -eu -c \
               "jar --list --file 'release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar' | grep -Fxq 'extensions/o11y-java-agent-extension.jar'"
           test "$(stat -c '%u:%g' "${release_jar}")" = "$(id -u):$(id -g)"
+          if docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "${GITHUB_WORKSPACE}:/workspace:ro" \
+            --workdir /workspace \
+            --entrypoint sh \
+            "${MAVEN_IMAGE}" \
+            -eu -c \
+              "jar --list --file 'release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar' | grep -Ei '(^|/)README\\.md$' >/dev/null"; then
+            echo "embedded Java Agent JAR must not contain README.md" >&2
+            exit 1
+          fi
           chmod 0444 "${release_jar}"
           rm -rf "${GITHUB_WORKSPACE}/release/embedded"
 

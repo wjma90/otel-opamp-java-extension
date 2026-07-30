@@ -1,6 +1,7 @@
 .git/
 .idea/
 .vscode/
+README.md
 target/
 *.iml
 *.log
