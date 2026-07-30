@@ -72,26 +72,6 @@ COPY --from=javaagent-build \
      /workspace/agent/opentelemetry-javaagent.jar \
      /opentelemetry-javaagent.jar
 
-FROM ${RUNTIME_IMAGE} AS extension-runtime
-
-ARG EXTENSION_VERSION
-
-RUN addgroup -S -g 10001 instrumentation \
-    && adduser -S -D -H -u 10001 -G instrumentation instrumentation \
-    && install -d -o 10001 -g 10001 -m 0750 /instrumentation
-
-COPY --from=build \
-     --chown=10001:10001 \
-     --chmod=0444 \
-     /workspace/target/java-agent-extension-${EXTENSION_VERSION}.jar \
-     /extension.jar
-
-VOLUME ["/instrumentation"]
-
-USER 10001:10001
-
-CMD ["/bin/sh", "-eu", "-c", "destination=/instrumentation/o11y-java-agent-extension.jar; temporary=${destination}.tmp; cp /extension.jar ${temporary}; chmod 0444 ${temporary}; mv -f ${temporary} ${destination}"]
-
 FROM ${RUNTIME_IMAGE} AS javaagent-runtime
 
 ARG EXTENSION_VERSION

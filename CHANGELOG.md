@@ -11,6 +11,9 @@ independiente.
 
 ### Changed
 
+- La distribución pública se reduce al Java Agent con la extensión embebida:
+  una imagen OCI multi-arquitectura y el mismo agente combinado como JAR del
+  GitHub Release. Ya no se publica una imagen ni un JAR de extensión aislados.
 - El contexto TLS con CA OpAMP adicional exige TLS 1.3; conserva validación de
   hostname y evita negociar protocolos obsoletos.
 - Los builds Quarkus anidados usan el Maven disponible en la imagen de CI y ya

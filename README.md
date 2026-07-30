@@ -8,7 +8,7 @@ métodos Java y mensajería. OpenTelemetry Operator inyecta el Java Agent con la
 
 - JDK 21 y Maven 3.9+;
 - compatibilidad exacta con OpenTelemetry Java Agent `2.28.1`;
-- release publicada `2.28.1-o11y.6`: schema máximo 1.6 y puerta adicional para
+- versión `2.28.1-o11y.9`: schema máximo 1.6 y puerta adicional para
   Quarkus `3.33.2.1` LTS en modo JVM.
 
 ## Compilar y probar
@@ -34,19 +34,22 @@ mvn -B -ntp \
 
 ```bash
 docker build \
-  --target extension-runtime \
-  --tag o11y-java-agent-extension:dev \
-  .
-
-docker build \
   --target javaagent-runtime \
   --tag o11y-java-agent:dev \
   .
 ```
 
-`javaagent-runtime` es la distribución recomendada: entrega un solo
-`opentelemetry-javaagent.jar` con la extensión embebida. El workflow de release
-publica ambas variantes para `linux/amd64` y `linux/arm64`.
+`javaagent-runtime` entrega un solo `opentelemetry-javaagent.jar` con la
+extensión embebida. El workflow publica esa misma distribución como imagen
+multi-arquitectura y como JAR adjunto al GitHub Release.
+
+```bash
+docker pull ghcr.io/wjma90/o11y-java-agent:2.28.1-o11y.9
+
+gh release download v2.28.1-o11y.9 \
+  --repo wjma90/otel-opamp-java-extension \
+  --pattern 'o11y-java-agent-*.jar'
+```
 
 ## Configuración
 

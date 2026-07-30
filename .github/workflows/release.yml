@@ -182,18 +182,12 @@ jobs:
             -Dquarkus.smoke.stack=resteasy-classic-undertow \
             clean verify
 
-      - name: Stage release JAR and resolve official agent checksum
+      - name: Stage embedded Java Agent JAR and resolve official checksum
         id: stage
         env:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
         run: |
           set -euo pipefail
-
-          release_dir="${GITHUB_WORKSPACE}/release/java-extension"
-          install -d "${release_dir}"
-          install -m 0444 \
-            "target/java-agent-extension-${EXTENSION_VERSION}.jar" \
-            "${release_dir}/o11y-java-agent-extension-${EXTENSION_VERSION}.jar"
 
           expected_sha256="$(awk -F= '$1 == "otel.javaagent.sha256" { print $2 }' release.properties)"
           actual_sha256="$(sha256sum target/agent/opentelemetry-javaagent.jar | awk '{print $1}')"
@@ -203,12 +197,38 @@ jobs:
           fi
           echo "agent_sha256=${expected_sha256}" >> "${GITHUB_OUTPUT}"
 
+          release_dir="${GITHUB_WORKSPACE}/release/java-agent"
+          embedded_dir="${GITHUB_WORKSPACE}/release/embedded/extensions"
+          release_jar="${release_dir}/o11y-java-agent-${EXTENSION_VERSION}.jar"
+          install -d "${release_dir}" "${embedded_dir}"
+          install -m 0644 \
+            target/agent/opentelemetry-javaagent.jar \
+            "${release_jar}"
+          install -m 0444 \
+            "target/java-agent-extension-${EXTENSION_VERSION}.jar" \
+            "${embedded_dir}/o11y-java-agent-extension.jar"
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            jar --update \
+              --file "release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar" \
+              -C release/embedded extensions
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace:ro" \
+            --workdir /workspace \
+            "${MAVEN_IMAGE}" \
+            sh -eu -c \
+              "jar --list --file 'release/java-agent/o11y-java-agent-${EXTENSION_VERSION}.jar' | grep -Fxq 'extensions/o11y-java-agent-extension.jar'"
+          chmod 0444 "${release_jar}"
+          rm -rf "${GITHUB_WORKSPACE}/release/embedded"
+
       - name: Generate SPDX SBOM for the JAR
         uses: anchore/sbom-action@v0
         with:
-          path: release/java-extension
+          path: release/java-agent
           format: spdx-json
-          output-file: release/java-extension/o11y-java-agent-extension-${{ steps.metadata.outputs.extension_version }}.spdx.json
+          output-file: release/java-agent/o11y-java-agent-${{ steps.metadata.outputs.extension_version }}.spdx.json
           upload-artifact: false
 
       - name: Generate checksums
@@ -216,18 +236,18 @@ jobs:
           EXTENSION_VERSION: ${{ steps.metadata.outputs.extension_version }}
         run: |
           set -euo pipefail
-          release_dir="${GITHUB_WORKSPACE}/release/java-extension"
+          release_dir="${GITHUB_WORKSPACE}/release/java-agent"
           cd "${release_dir}"
           sha256sum \
-            "o11y-java-agent-extension-${EXTENSION_VERSION}.jar" \
-            "o11y-java-agent-extension-${EXTENSION_VERSION}.spdx.json" \
+            "o11y-java-agent-${EXTENSION_VERSION}.jar" \
+            "o11y-java-agent-${EXTENSION_VERSION}.spdx.json" \
             > SHA256SUMS
 
       - name: Upload verified release assets
         uses: actions/upload-artifact@v4
         with:
-          name: java-extension-${{ steps.metadata.outputs.extension_version }}
-          path: release/java-extension/*
+          name: java-agent-${{ steps.metadata.outputs.extension_version }}
+          path: release/java-agent/*
           if-no-files-found: error
           retention-days: 14
 
@@ -365,8 +385,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  images:
-    name: Publish multi-architecture images
+  image:
+    name: Publish embedded Java Agent image
     if: github.ref_type == 'tag'
     needs:
       - verify
@@ -376,8 +396,6 @@ jobs:
       contents: read
       packages: write
     outputs:
-      extension_digest: ${{ steps.extension-image.outputs.digest }}
-      extension_image: ${{ steps.names.outputs.extension }}
       javaagent_digest: ${{ steps.javaagent-image.outputs.digest }}
       javaagent_image: ${{ steps.names.outputs.javaagent }}
     steps:
@@ -389,7 +407,6 @@ jobs:
         shell: bash
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "extension=ghcr.io/${owner}/o11y-java-agent-extension" >> "${GITHUB_OUTPUT}"
           echo "javaagent=ghcr.io/${owner}/o11y-java-agent" >> "${GITHUB_OUTPUT}"
 
       - name: Log in to GHCR
@@ -404,25 +421,6 @@ jobs:
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Publish extension-only image
-        id: extension-image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: extension-runtime
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.names.outputs.extension }}:${{ needs.verify.outputs.extension_version }}
-          build-args: |
-            EXTENSION_VERSION=${{ needs.verify.outputs.extension_version }}
-            OTEL_AGENT_VERSION=${{ needs.verify.outputs.otel_agent_version }}
-            OTEL_AGENT_SHA256=${{ needs.verify.outputs.agent_sha256 }}
-          cache-from: type=gha,scope=java-extension
-          cache-to: type=gha,mode=max,scope=java-extension
-          provenance: mode=max
-          sbom: true
 
       - name: Publish embedded Java Agent image
         id: javaagent-image
@@ -444,9 +442,9 @@ jobs:
           sbom: true
 
   scan-images:
-    name: Scan ${{ matrix.image }} on linux/${{ matrix.arch }}
+    name: Scan embedded Java Agent on linux/${{ matrix.arch }}
     if: github.ref_type == 'tag'
-    needs: images
+    needs: image
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -454,9 +452,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - extension
-          - javaagent
         arch:
           - amd64
           - arm64
@@ -468,33 +463,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve immutable image
-        id: subject
-        env:
-          EXTENSION_DIGEST: ${{ needs.images.outputs.extension_digest }}
-          EXTENSION_IMAGE: ${{ needs.images.outputs.extension_image }}
-          JAVAAGENT_DIGEST: ${{ needs.images.outputs.javaagent_digest }}
-          JAVAAGENT_IMAGE: ${{ needs.images.outputs.javaagent_image }}
-          IMAGE_KIND: ${{ matrix.image }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${IMAGE_KIND}" == "extension" ]]; then
-            echo "reference=${EXTENSION_IMAGE}@${EXTENSION_DIGEST}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "reference=${JAVAAGENT_IMAGE}@${JAVAAGENT_DIGEST}" >> "${GITHUB_OUTPUT}"
-          fi
-
       - name: Scan image and enforce the release gate
         env:
           ARCH: ${{ matrix.arch }}
-          IMAGE_KIND: ${{ matrix.image }}
-          IMAGE_REFERENCE: ${{ steps.subject.outputs.reference }}
+          IMAGE_REFERENCE: ${{ needs.image.outputs.javaagent_image }}@${{ needs.image.outputs.javaagent_digest }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p reports trivy-cache
-          report="reports/${IMAGE_KIND}-linux-${ARCH}.json"
+          report="reports/javaagent-linux-${ARCH}.json"
           mounts=(
             -v "${HOME}/.docker:/root/.docker:ro"
             -v "${PWD}/reports:/reports"
@@ -504,7 +481,7 @@ jobs:
             image --platform "linux/${ARCH}" \
             --scanners vuln,secret,misconfig \
             --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-            --format json --output "/reports/${IMAGE_KIND}-linux-${ARCH}.json" \
+            --format json --output "/reports/javaagent-linux-${ARCH}.json" \
             "${IMAGE_REFERENCE}"
           test -s "${report}"
           docker run --rm "${mounts[@]}" "${TRIVY_IMAGE}" \
@@ -517,7 +494,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: java-${{ matrix.image }}-scan-linux-${{ matrix.arch }}
+          name: javaagent-scan-linux-${{ matrix.arch }}
           path: reports/*.json
           if-no-files-found: warn
           retention-days: 30
@@ -527,7 +504,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs:
       - verify
-      - images
+      - image
       - scan-images
     runs-on: ubuntu-24.04
     permissions:
@@ -539,15 +516,13 @@ jobs:
       - name: Download verified assets
         uses: actions/download-artifact@v4
         with:
-          name: java-extension-${{ needs.verify.outputs.extension_version }}
+          name: java-agent-${{ needs.verify.outputs.extension_version }}
           path: release
 
       - name: Compose release notes
         env:
-          EXTENSION_DIGEST: ${{ needs.images.outputs.extension_digest }}
-          EXTENSION_IMAGE: ${{ needs.images.outputs.extension_image }}
-          JAVAAGENT_DIGEST: ${{ needs.images.outputs.javaagent_digest }}
-          JAVAAGENT_IMAGE: ${{ needs.images.outputs.javaagent_image }}
+          JAVAAGENT_DIGEST: ${{ needs.image.outputs.javaagent_digest }}
+          JAVAAGENT_IMAGE: ${{ needs.image.outputs.javaagent_image }}
           EXTENSION_VERSION: ${{ needs.verify.outputs.extension_version }}
           OTEL_AGENT_VERSION: ${{ needs.verify.outputs.otel_agent_version }}
         shell: bash
@@ -566,7 +541,6 @@ jobs:
             echo
             echo "## OCI images"
             echo
-            echo "- \`${EXTENSION_IMAGE}:${EXTENSION_VERSION}@${EXTENSION_DIGEST}\`"
             echo "- \`${JAVAAGENT_IMAGE}:${EXTENSION_VERSION}@${JAVAAGENT_DIGEST}\`"
             echo
             echo "Compatible OpenTelemetry Java Agent: \`${OTEL_AGENT_VERSION}\`."
@@ -581,5 +555,5 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             release/* \
             --verify-tag \
-            --title "O11y Java Agent Extension ${EXTENSION_VERSION}" \
+            --title "O11y Java Agent ${EXTENSION_VERSION}" \
             --notes-file release-notes.md
