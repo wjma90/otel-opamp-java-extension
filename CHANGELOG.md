@@ -7,6 +7,8 @@ independiente.
 
 ## [Unreleased]
 
+## [2.28.1-o11y.10] - 2026-07-30
+
 ### Changed
 
 - El smoke Servlet entrega su `PolicySet` por OpAMP HTTP/protobuf real y exige
