@@ -7,6 +7,11 @@ independiente.
 
 ## [Unreleased]
 
+### Changed
+
+- El smoke Servlet entrega su `PolicySet` por OpAMP HTTP/protobuf real y exige
+  la confirmación `APPLIED` del Java Agent antes de validar la telemetría.
+
 ## [2.28.1-o11y.9] - 2026-07-30
 
 ### Changed
